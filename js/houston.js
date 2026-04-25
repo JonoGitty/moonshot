@@ -969,11 +969,21 @@ class HoustonAssist {
           this.steerTo(Math.atan2(v.y, v.x) + Math.PI, dt);
         }
 
-        // Warp while coasting to the atmosphere, drop to 1× once inside
+        // Warp logic for re-entry:
+        //   above atmosphere: high warp coast
+        //   in atmosphere, hot: 1× (drag/heat sensitive)
+        //   under chutes, low + slow: moderate warp through the chute descent
         if (altE > ATMOSPHERE_HEIGHT + 5e3) {
           if (this.game.timeWarpIdx < 4) {
             this.game.timeWarpIdx = 4;
             this.game.timeWarp = TIME_WARP_LEVELS[4];
+          }
+        } else if (c.capsule.parachutesDeployed && altE < 8e3 && vMag < 50) {
+          // Post-chute steady descent — bump to 5× so the test/player isn't
+          // waiting 5 minutes for the capsule to bob down on chutes.
+          if (this.game.timeWarpIdx !== 2) {
+            this.game.timeWarpIdx = 2;
+            this.game.timeWarp = TIME_WARP_LEVELS[2];
           }
         } else if (this.game.timeWarpIdx > 0) {
           this.game.timeWarpIdx = 0;

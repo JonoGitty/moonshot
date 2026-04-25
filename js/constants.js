@@ -187,7 +187,8 @@ const SPACECRAFT = {
       length: 3.3,
       diameter: 1.9,
       maxTemp: 2500,                 // capsule burns through above this (°C)
-      parachuteDrag: 90,             // effective drag area (Cd*A) when deployed
+      // Mercury: single 19m drogue + 19m main. Real splash at ~9 m/s.
+      parachuteDrag: 500,
       parachuteAlt: 3000,            // safe deploy altitude ceiling
       color: '#b8b8b8',
     },
@@ -271,7 +272,8 @@ const SPACECRAFT = {
       length: 7,
       diameter: 4,
       maxTemp: 3200,
-      parachuteDrag: 230,
+      // Real Dragon: 4× 35 m diameter mains. Cd*A → ~3200 m². Lands at ~5 m/s.
+      parachuteDrag: 3200,
       parachuteAlt: 3000,
       color: '#cfcfcf',
     },
@@ -452,7 +454,9 @@ const SPACECRAFT = {
       length: 4.3,
       diameter: 2.4,
       maxTemp: 2600,
-      parachuteDrag: 95,
+      // Real Vostok: single main parachute deployed at 7 km, plus the cosmonaut
+      // ejecting at 7 km and parachuting separately. Game uses just the main.
+      parachuteDrag: 700,
       parachuteAlt: 7000,
       color: '#d0d0d0',
     },
@@ -579,7 +583,7 @@ const SPACECRAFT = {
       length: 7.5,
       diameter: 5.0,
       maxTemp: 4000,                       // PICA-X heat shield
-      parachuteDrag: 280,
+      parachuteDrag: 3500,
       parachuteAlt: 3500,
       color: '#cccccc',
     },
@@ -685,7 +689,7 @@ const SPACECRAFT = {
       length: 7.5,
       diameter: 5.0,
       maxTemp: 4000,
-      parachuteDrag: 280,
+      parachuteDrag: 3500,
       parachuteAlt: 3500,
       color: '#cccccc',
     },
@@ -884,7 +888,8 @@ const SPACECRAFT = {
       length: 7.5,
       diameter: 2.72,
       maxTemp: 2800,
-      parachuteDrag: 120,
+      // Real Soyuz: single 1000 m² main + soft-landing solid retros at 1m.
+      parachuteDrag: 1000,
       parachuteAlt: 9000,
       color: '#dcdcdc',
     },
@@ -1032,7 +1037,8 @@ const SPACECRAFT = {
       length: 11,
       diameter: 3.9,
       maxTemp: 3800,
-      parachuteDrag: 260,
+      // Real Apollo CSM: 3× 25 m diameter mains, Cd*A ~3000 m². Splash at ~9 m/s.
+      parachuteDrag: 3000,
       parachuteAlt: 3500,
       color: '#c8c8c8',
     },

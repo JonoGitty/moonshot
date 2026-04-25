@@ -172,20 +172,20 @@ No frameworks. No bundler. Classic `<script>` tags so it works straight off `fil
 
 ## Design notes
 
-### Why no LM rendezvous physics?
-Real Apollo: CSM stays in lunar orbit while the LM descends, lands, ascends, then rendezvous + docks with the CSM. Modelling true rendezvous in 2D would mean the player has to fly the LM with the CSM also being simulated. We use a "ghost CSM" — when the LM undocks for descent, the CSM becomes a passive Keplerian object that orbits the Moon; on LM ascent the autopilot snaps the docking once the LM achieves a stable lunar orbit. The mass accounting in the Δv planner respects this: LM stages are computed solo so Apollo's 17.6 km/s budget actually closes.
+### Apollo CSM/LM rendezvous
+Real Apollo: CSM stays in lunar orbit while the LM descends, lands, ascends, then rendezvous + docks with the CSM. We model this with a "ghost CSM" — when the LM undocks for descent, the CSM becomes a passive Keplerian object orbiting the Moon under gravity; on LM ascent the autopilot completes the docking once the LM achieves a stable lunar orbit. The Δv planner respects this: LM stages are computed solo so Apollo's 17.6 km/s budget actually closes.
 
-### Why does Artemis II "orbit" the Moon when in real life it's a free-return flyby?
-Real Artemis II's hybrid free-return loops around the lunar far side at ~9,500 km — it's geometrically a single very-eccentric orbit. To make this look right in 2D we model it as a wide lunar orbit (`lunarApo` 9500 km, `lunarPeri` 7500 km) with a small LOI burn, instead of pure ballistic flyby physics that would just whisk past at 41,000 km altitude in our simplified gravity model.
+### Artemis II's lunar loop
+Real Artemis II's hybrid free-return loops around the lunar far side at ~9,500 km — it's geometrically a single very-eccentric orbit. We model it as a wide lunar orbit (`lunarApo` 9500 km, `lunarPeri` 7500 km) with a small LOI burn so the loop is visible on the map, rather than a hyperbolic flyby that would zip past at 41,000 km altitude.
 
-### The autopilot's TLI window
+### The TLI window
 When Houston flies a Moon mission, it parks in LEO and waits for the Moon to be exactly 114° ahead of the craft before firing TLI. This is the Hohmann phase angle for a ~3-day transfer — the same calculation used by Apollo's mission planners.
 
 ### G-force calc
-The HUD shows **proper acceleration** — what an accelerometer on the craft actually reads — not coordinate acceleration. A craft in free-fall reads 0g; a craft sitting on the launch pad reads 1g. Real Apollo S-IC peak was 3.9g, S-II 1.85g, re-entry 7g, and the autopilot routinely matches those numbers.
+The HUD shows **proper acceleration** — what an accelerometer on the craft actually reads — not coordinate acceleration. A craft in free-fall reads 0g; a craft sitting on the launch pad reads 1g. Real Apollo S-IC peak was 3.9g, S-II 1.85g, re-entry 7g, and the autopilot matches those numbers.
 
 ### Stage Δv calc and the Apollo undock trick
-`rocketDeltaV()` walks the stack bottom-up summing Isp × g₀ × ln(wet/dry) per stage. For Apollo-style stacks (LM Descent + LM Ascent stages present) it computes those stages assuming the CSM has been left in lunar orbit — otherwise the LM Ascent's 4.7 t and 15.6 kN APS engine could never lift the 30 t CSM and the planner would falsely declare Apollo impossible.
+`rocketDeltaV()` walks the stack bottom-up summing Isp × g₀ × ln(wet/dry) per stage. For Apollo-style stacks (LM Descent + LM Ascent stages present) it computes those stages assuming the CSM has been left in lunar orbit — otherwise the LM Ascent's 4.7 t and 15.6 kN APS engine could never lift the 30 t CSM, and the planner would falsely declare Apollo impossible.
 
 ---
 

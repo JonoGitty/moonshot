@@ -7,16 +7,17 @@
 import { chromium } from 'playwright';
 
 // Real-time budget in seconds, and the "required milestones" we want hit.
+// "Mission complete" criteria — what does this ship need to do END-TO-END?
 const MISSIONS = {
-  mercury:  { budgetS: 300, expect: ['leftPad', 'reachedSpace'] },
-  sputnik:  { budgetS: 300, expect: ['leftPad', 'reachedOrbit', 'satelliteDeployed'] },
-  vostok:   { budgetS: 360, expect: ['leftPad', 'reachedOrbit'] },
-  falcon9:  { budgetS: 360, expect: ['leftPad', 'reachedOrbit'] },
-  shuttle:  { budgetS: 1200, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
-  soyuz:    { budgetS: 900, expect: ['leftPad', 'reachedOrbit', 'dockedWithISS'] },
-  saturn5:  { budgetS: 2400, expect: ['leftPad', 'reachedOrbit', 'approachedMoon'] },
-  sls:      { budgetS: 2400, expect: ['leftPad', 'reachedOrbit', 'approachedMoon'] },
-  artemis2: { budgetS: 2400, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit'] },
+  mercury:  { budgetS: 800,  expect: ['leftPad', 'reachedSpace', 'landedOnEarth'] },
+  sputnik:  { budgetS: 600,  expect: ['leftPad', 'reachedOrbit', 'satelliteDeployed'] },
+  vostok:   { budgetS: 1500, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
+  falcon9:  { budgetS: 1800, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
+  shuttle:  { budgetS: 1800, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
+  soyuz:    { budgetS: 1800, expect: ['leftPad', 'reachedOrbit', 'dockedWithISS', 'landedOnEarth'] },
+  saturn5:  { budgetS: 3000, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'landedOnMoon', 'launchedFromMoon', 'landedOnEarth'] },
+  sls:      { budgetS: 3000, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit', 'landedOnEarth'] },
+  artemis2: { budgetS: 3000, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit', 'landedOnEarth'] },
 };
 
 async function runMission(page, ship, budgetS) {

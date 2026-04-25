@@ -784,8 +784,9 @@ const SPACECRAFT = {
       // less likely to dive too steep into thick atmosphere.
       liftCoeff: 1.2,
       // Max safe touchdown speed (m/s). Real Shuttle main-gear touchdown
-      // ~95 m/s, drag chute and wheel brakes bring it down from there.
-      landingSpeed: 150,
+      // ~95 m/s; we allow up to 200 because our 2D physics doesn't model
+      // the drag chute + wheel brakes that decelerate on the ground.
+      landingSpeed: 200,
       color: '#f0f0f0',
     },
   },

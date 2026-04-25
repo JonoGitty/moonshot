@@ -586,11 +586,23 @@ class HoustonAssist {
           this.steerTo(Math.atan2(vRelMoon.y, vRelMoon.x) + Math.PI, dt);
         }
 
+        // Adaptive warp: closing 60,000 km at 5× warp takes hours real time.
+        // Stay at 50× until within ~3× the LOI trigger altitude, then drop
+        // through 10× to 1× for the final approach.
+        const triggerAlt = Math.max(2000e3, this.autoLunarApo * 4);
+        let warpIdx;
+        if (altM > triggerAlt * 5) warpIdx = 4;        // 50× — far
+        else if (altM > triggerAlt * 1.5) warpIdx = 3; // 10× — closing
+        else warpIdx = 0;                              // 1× — about to burn
+        if (this.game.timeWarpIdx !== warpIdx) {
+          this.game.timeWarpIdx = warpIdx;
+          this.game.timeWarp = TIME_WARP_LEVELS[warpIdx];
+        }
+
         // Start the LOI burn when within reasonable proximity. Threshold
         // scales with the target lunar orbit altitude — Apollo orbits low
         // (~100 km) so trigger at ~2 Mm above surface; Artemis II uses a
         // wide ~9000 km orbit so trigger much earlier.
-        const triggerAlt = Math.max(2000e3, this.autoLunarApo * 4);
         if (altM < triggerAlt) {
           this.game.timeWarpIdx = 0;
           this.game.timeWarp = TIME_WARP_LEVELS[0];
@@ -981,6 +993,12 @@ class HoustonAssist {
         } else if (c.capsule.parachutesDeployed && altE < 8e3 && vMag < 50) {
           // Post-chute steady descent — bump to 5× so the test/player isn't
           // waiting 5 minutes for the capsule to bob down on chutes.
+          if (this.game.timeWarpIdx !== 2) {
+            this.game.timeWarpIdx = 2;
+            this.game.timeWarp = TIME_WARP_LEVELS[2];
+          }
+        } else if (isShuttle && altE < 25e3 && vMag < 800) {
+          // Shuttle subsonic glide — gradient-warp through final approach
           if (this.game.timeWarpIdx !== 2) {
             this.game.timeWarpIdx = 2;
             this.game.timeWarp = TIME_WARP_LEVELS[2];

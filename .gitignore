@@ -1,0 +1,28 @@
+node_modules/
+*.log
+.DS_Store
+
+# Test artifacts (kept locally for iteration but not in repo)
+test-*.png
+test-saturn*.png
+test-sls*.png
+test-shipshots.mjs
+test-trace.mjs
+test-menu.mjs
+test-screenshots.mjs
+test-briefing.mjs
+test-planner.mjs
+test-iss.mjs
+test-shuttle-zoom.mjs
+shuttle-stack.png
+shuttle-orbiter.png
+iss-*.png
+ship-*.png
+designs/
+
+# Local dev data
+package-lock.json
+
+# IDE
+.vscode/
+.idea/

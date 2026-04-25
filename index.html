@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>MOONSHOT</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- In-flight HUD (hidden until mission starts) -->
+  <div class="hud hidden">
+    <div id="hud-info" class="panel">
+      <div class="hud-row"><span class="hud-label">PHASE</span><span id="info-phase" class="hud-value">—</span></div>
+      <div class="hud-row"><span class="hud-label">T+</span><span id="info-time" class="hud-value">0</span></div>
+      <div class="hud-row"><span class="hud-label">WARP</span><span id="info-warp" class="hud-value">1x</span></div>
+      <div class="divider"></div>
+      <div class="hud-row"><span class="hud-label">ALTITUDE</span><span id="info-altitude" class="hud-value">0 m</span></div>
+      <div class="hud-row"><span class="hud-label">VELOCITY</span><span id="info-velocity" class="hud-value">0 m/s</span></div>
+      <div class="hud-row"><span class="hud-label">VERT</span><span id="info-vvel" class="hud-value">0 m/s</span></div>
+      <div class="hud-row"><span class="hud-label">HORIZ</span><span id="info-hvel" class="hud-value">0 m/s</span></div>
+      <div class="divider"></div>
+      <div class="hud-row"><span class="hud-label">APOAPSIS</span><span id="info-apoapsis" class="hud-value">—</span></div>
+      <div class="hud-row"><span class="hud-label">PERIAPSIS</span><span id="info-periapsis" class="hud-value">—</span></div>
+      <div class="hud-row"><span class="hud-label">MOON DIST</span><span id="info-moon-dist" class="hud-value">—</span></div>
+      <div class="divider"></div>
+      <div class="hud-row"><span class="hud-label">THROTTLE</span><span id="info-throttle" class="hud-value">0%</span></div>
+      <div class="hud-row"><span class="hud-label">HEAT</span><span id="info-heat" class="hud-value">0°C</span></div>
+      <div class="hud-row"><span class="hud-label">G-FORCE</span><span id="info-g" class="hud-value">1.0 g</span></div>
+    </div>
+
+    <div id="hud-stages" class="panel">
+      <div class="panel-header">STAGES</div>
+      <div id="hud-stages-body"></div>
+    </div>
+
+    <div id="hud-objective" class="panel">
+      <div class="panel-header">OBJECTIVE</div>
+      <div id="objective-text">Hold W to launch</div>
+    </div>
+
+    <div id="hud-capcom" class="panel">
+      <div class="panel-header">🎙 HOUSTON · <span id="capcom-mode">ASSIST</span> <span class="capcom-hint">[L to toggle]</span></div>
+      <div id="capcom-feed"><em class="capcom-empty">Awaiting first contact…</em></div>
+    </div>
+
+    <div id="hud-controls" class="panel">
+      <div class="panel-header">CONTROLS</div>
+      <div class="ctrl-row"><kbd>W/S</kbd>throttle up/down</div>
+      <div class="ctrl-row"><kbd>Z/X</kbd>throttle 0 / max</div>
+      <div class="ctrl-row"><kbd>A/D</kbd>rotate CCW/CW</div>
+      <div class="ctrl-row"><kbd>Q/E</kbd>fine rotate</div>
+      <div class="ctrl-row"><kbd>SPACE</kbd>separate stage</div>
+      <div class="ctrl-row"><kbd>T</kbd>SAS <span id="sas-indicator" class="on">ON</span></div>
+      <div class="ctrl-row"><kbd>G</kbd>parachutes</div>
+      <div class="ctrl-row"><kbd>H</kbd>hold prograde</div>
+      <div class="ctrl-row"><kbd>J</kbd>hold retrograde</div>
+      <div class="ctrl-row"><kbd>M</kbd>map view</div>
+      <div class="ctrl-row"><kbd>,/.</kbd>time warp</div>
+      <div class="ctrl-row"><kbd>[ ]</kbd>zoom in/out</div>
+      <div class="ctrl-row"><kbd>P</kbd>pause</div>
+      <div class="ctrl-row"><kbd>L</kbd>Houston mode</div>
+      <div class="ctrl-row"><kbd>ESC</kbd>abort to menu</div>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <!-- Main menu / vehicle select -->
+  <div id="menu">
+    <h1>MOONSHOT</h1>
+    <div class="subtitle">REAL PHYSICS · REAL ROCKETS · REAL MOON</div>
+
+    <div class="brief">
+      <p>Launch from Earth. Slingshot to the Moon. Get home alive.</p>
+      <p>Newton gives you gravity from Earth and Moon. Atmosphere fights you on the way up and wants to kill you on the way down. Use your stages. Time warp in vacuum. Flip the capsule around so the heat shield takes the heat.</p>
+    </div>
+
+    <div class="ship-grid">
+      <div class="ship" data-ship="mercury">
+        <div class="ship-marker">▌</div>
+        <h3>MERCURY-REDSTONE</h3>
+        <div class="stat">1 stage · 1961</div>
+        <div class="stat">30 t · 350 kN</div>
+        <div class="goal">🎯 Suborbital hop + splashdown</div>
+        <div class="desc">Arc above 100 km and splash back down. Just like Shepard.</div>
+      </div>
+      <div class="ship" data-ship="falcon9">
+        <div class="ship-marker">▌▌</div>
+        <h3>FALCON 9</h3>
+        <div class="stat">2 stages · 2010s</div>
+        <div class="stat">550 t · 7.6 MN</div>
+        <div class="goal">🎯 LEO + return to Earth</div>
+        <div class="desc">Modern orbital workhorse. Dragon capsule. Easy LEO.</div>
+      </div>
+      <div class="ship recommended" data-ship="saturn5">
+        <div class="ship-marker">▌▌▌</div>
+        <h3>SATURN V</h3>
+        <div class="stat">3 stages · Apollo 1969</div>
+        <div class="stat">2 900 t · 34 MN</div>
+        <div class="goal">🎯 Apollo 11 — land on the Moon + return</div>
+        <div class="desc">Real Saturn V (S-IC, S-II, S-IVB) + game-boosted CSM that substitutes for the LM (we don't model rendezvous).</div>
+      </div>
+      <div class="ship" data-ship="sputnik">
+        <div class="ship-marker">▌</div>
+        <h3>R-7 / SPUTNIK</h3>
+        <div class="stat">1 stage · Soviet 1957</div>
+        <div class="stat">270 t · 3.9 MN</div>
+        <div class="goal">🎯 Put a satellite in orbit</div>
+        <div class="desc">First satellite launcher. No return — just beep from orbit.</div>
+      </div>
+      <div class="ship" data-ship="vostok">
+        <div class="ship-marker">▌▌</div>
+        <h3>VOSTOK 1</h3>
+        <div class="stat">2 stages · Gagarin 1961</div>
+        <div class="stat">280 t · 3.9 MN</div>
+        <div class="goal">🎯 One orbit + re-entry</div>
+        <div class="desc">Yuri Gagarin's flight. Orbit once then splash down. First human in space.</div>
+      </div>
+      <div class="ship" data-ship="shuttle">
+        <div class="ship-marker">▌▌</div>
+        <h3>SPACE SHUTTLE</h3>
+        <div class="stat">2 stages · STS-1 1981</div>
+        <div class="stat">2 030 t · 30 MN</div>
+        <div class="goal">🎯 STS-1 — LEO + glide return</div>
+        <div class="desc">Young &amp; Crippen's maiden Columbia flight. SRBs + SSMEs fire together, SRBs drop, SSMEs continue on ET fuel, Orbiter glides home.</div>
+      </div>
+      <div class="ship" data-ship="soyuz">
+        <div class="ship-marker">▌▌▌</div>
+        <h3>SOYUZ-FG · TMA-19M</h3>
+        <div class="stat">3 stages · 2015</div>
+        <div class="stat">Tim Peake · Principia</div>
+        <div class="goal">🎯 Dock with ISS + return</div>
+        <div class="desc">Tim Peake's ESA Principia mission. R-7 descendant with strap-ons + core + Block I upper. 186 days on ISS, splashdown retrograde in Kazakhstan.</div>
+      </div>
+      <div class="ship" data-ship="sls">
+        <div class="ship-marker">▌▌</div>
+        <h3>SLS BLOCK 1</h3>
+        <div class="stat">3 stages · Artemis 2022</div>
+        <div class="stat">2 600 t · 39 MN</div>
+        <div class="goal">🎯 Artemis I — lunar flyby + return</div>
+        <div class="desc">Real SLS + Orion. SRBs + core fire together, SRBs drop first, ICPS does TLI. No landing (needs HLS).</div>
+      </div>
+      <div class="ship sandbox" data-ship="creative">
+        <div class="ship-marker">∞</div>
+        <h3>X-1 SANDBOX</h3>
+        <div class="stat">Creative · infinite fuel</div>
+        <div class="stat">Nearly indestructible</div>
+        <div class="goal">🎯 No goal — just fly</div>
+        <div class="desc">Infinite fuel, super heat shield, modest thrust. Explore Earth / Moon space without mission pressure. Great for learning controls.</div>
+      </div>
+      <div class="ship" data-ship="artemis2">
+        <div class="ship-marker">▌▌▌</div>
+        <h3>ARTEMIS II</h3>
+        <div class="stat">3 stages · SLS 2026</div>
+        <div class="stat">Crew of 4 · Free return</div>
+        <div class="goal">🎯 First crewed lunar flyby since 1972</div>
+        <div class="desc">Same SLS + Orion. Wiseman, Glover, Koch, Hansen on a ~10-day free-return slingshot around the Moon. No LOI — gravity loops them back.</div>
+      </div>
+    </div>
+
+    <div id="planner-section">
+      <div class="planner-header">📋 <strong>MISSION PLANNER</strong> — design a real trajectory: pick the profile, set the orbits, see the Δv budget for every burn, check rocket capability, then fly it</div>
+
+      <div class="planner-toprow">
+        <div class="planner-col">
+          <label class="planner-block-label">MISSION PROFILE
+            <select id="planner-mission">
+              <option value="leo">LEO — orbit + de-orbit</option>
+              <option value="iss">ISS — rendezvous &amp; dock</option>
+              <option value="moonFlyby">Moon — free-return flyby</option>
+              <option value="moonOrbit">Moon — LOI + lunar orbit + return</option>
+              <option value="moonLand">Moon — land + return (Apollo style)</option>
+              <option value="geo">GTO + circularize at GEO</option>
+            </select>
+          </label>
+          <div id="planner-mission-desc" class="planner-desc"></div>
+
+          <div id="planner-params" class="planner-params"></div>
+        </div>
+
+        <div class="planner-col">
+          <label class="planner-block-label">VEHICLE
+            <select id="planner-ship">
+              <option value="mercury">Mercury-Redstone</option>
+              <option value="falcon9" selected>Falcon 9 + Dragon</option>
+              <option value="soyuz">Soyuz-FG + TMA</option>
+              <option value="shuttle">Space Shuttle</option>
+              <option value="vostok">Vostok-K</option>
+              <option value="saturn5">Saturn V + Apollo CSM/LM</option>
+              <option value="sls">SLS Block 1 + Orion</option>
+              <option value="creative">X-1 Sandbox (∞ fuel)</option>
+            </select>
+          </label>
+          <div id="planner-ship-stats" class="planner-desc"></div>
+        </div>
+      </div>
+
+      <button id="planner-evaluate" class="planner-eval-btn">▶ EVALUATE MISSION</button>
+
+      <div id="planner-result" class="planner-result hidden">
+        <div class="planner-summary">
+          <div class="planner-stat"><span class="stat-label">Δv NEEDED</span><span class="stat-value" id="planner-dv-need">—</span></div>
+          <div class="planner-stat"><span class="stat-label">Δv AVAILABLE</span><span class="stat-value" id="planner-dv-have">—</span></div>
+          <div class="planner-stat"><span class="stat-label">MARGIN</span><span class="stat-value" id="planner-dv-margin">—</span></div>
+          <div class="planner-stat"><span class="stat-label">LIFTOFF TWR</span><span class="stat-value" id="planner-twr">—</span></div>
+          <div class="planner-stat"><span class="stat-label">LIFTOFF MASS</span><span class="stat-value" id="planner-mass">—</span></div>
+          <div class="planner-stat planner-go"><span class="stat-label">VERDICT</span><span class="stat-value" id="planner-verdict">—</span></div>
+        </div>
+        <div id="planner-warnings"></div>
+        <div class="planner-section-title">BURN SCHEDULE</div>
+        <table class="planner-burns" id="planner-burns"></table>
+        <div class="planner-section-title">VEHICLE Δv BREAKDOWN</div>
+        <table class="planner-stages" id="planner-stages"></table>
+        <button id="planner-launch" class="planner-launch-btn">LAUNCH MISSION ▸</button>
+      </div>
+    </div>
+
+    <div class="addon-toggle">
+      <div class="toggle-label">🎙 <strong>HOUSTON CAPCOM</strong> — Apollo / Artemis mission guidance</div>
+      <div class="houston-modes">
+        <label><input type="radio" name="houston-mode" value="off"><span>OFF</span><small>quiet flight, no callouts</small></label>
+        <label><input type="radio" name="houston-mode" value="assist" checked><span>ASSIST</span><small>narrate phases + give burn instructions</small></label>
+        <label><input type="radio" name="houston-mode" value="auto"><span>AUTOPILOT</span><small>Houston flies it: throttle, pitch, staging, circularization (any key disengages)</small></label>
+      </div>
+    </div>
+
+    <div class="hint">Pick a rocket. <kbd>W</kbd> to throttle up, <kbd>A</kbd>/<kbd>D</kbd> to steer, <kbd>M</kbd> for the orbital map.</div>
+  </div>
+
+  <!-- Pre-launch briefing modal -->
+  <div id="briefing" class="hidden">
+    <div class="briefing-inner">
+      <div class="briefing-header">
+        <div class="briefing-eyebrow" id="briefing-eyebrow">MISSION BRIEFING</div>
+        <h2 id="briefing-title">—</h2>
+        <div class="briefing-sub">
+          <span id="briefing-date">—</span>
+          <span class="sep">·</span>
+          <span id="briefing-crew">—</span>
+          <span class="difficulty" id="briefing-difficulty">★☆☆☆☆</span>
+        </div>
+      </div>
+      <p class="briefing-hist" id="briefing-historical">—</p>
+      <p class="briefing-quote" id="briefing-quote"></p>
+
+      <div class="briefing-section-title">FLIGHT PLAN</div>
+      <div class="briefing-phases" id="briefing-phases"></div>
+
+      <div class="briefing-footer">
+        <button id="briefing-back">◂ BACK</button>
+        <button id="briefing-launch" class="primary">LAUNCH ▸</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mission end -->
+  <div id="ending" class="hidden">
+    <h2 id="ending-title">MISSION COMPLETE</h2>
+    <div id="ending-reason" class="reason"></div>
+    <div id="ending-milestones" class="milestones"></div>
+    <div id="ending-stats" class="stats"></div>
+    <button id="restart-btn">RETURN TO MENU</button>
+  </div>
+
+  <!-- Scripts: loaded in dependency order, classic <script> tags so file:// works -->
+  <script src="js/constants.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/body.js"></script>
+  <script src="js/craft.js"></script>
+  <script src="js/trajectory.js"></script>
+  <script src="js/houston.js"></script>
+  <script src="js/planner.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

@@ -113,9 +113,11 @@ function drawBody(ctx, body, cam, w, h) {
     }
   }
 
-  // Body disk with lit/shaded gradient (sun conceptually to the right: +X in world)
-  const sunDirX = 1, sunDirY = 0;   // world
-  const sunScreenDx = sunDirX;      // same on screen (Y-flip doesn't matter for +X)
+  // Body disk with lit/shaded gradient. Sun direction comes from the mission's
+  // real launch time of day (computed via sunEclipticLongitude in startMission).
+  const sunAng = (typeof window !== 'undefined' && window.game && window.game.sunAngle !== undefined) ? window.game.sunAngle : 0;
+  const sunDirX = Math.cos(sunAng), sunDirY = Math.sin(sunAng);
+  const sunScreenDx = sunDirX;
   const sunScreenDy = -sunDirY;
   const litX = s.x + sunScreenDx * r * 0.4;
   const litY = s.y + sunScreenDy * r * 0.4;
@@ -169,7 +171,10 @@ function drawBody(ctx, body, cam, w, h) {
   }
 
   // Night side: overlay a dark gradient on the anti-sun side
-  const nightGrad = ctx.createLinearGradient(s.x - r, s.y, s.x + r, s.y);
+  const nightGrad = ctx.createLinearGradient(
+    s.x - sunDirX * r, s.y - sunScreenDy * r,
+    s.x + sunDirX * r, s.y + sunScreenDy * r
+  );
   nightGrad.addColorStop(0, 'rgba(0,0,0,0.7)');
   nightGrad.addColorStop(0.45, 'rgba(0,0,0,0.35)');
   nightGrad.addColorStop(0.6, 'rgba(0,0,0,0)');
@@ -208,12 +213,24 @@ function drawSurfaceView(ctx, body, cam, w, h) {
   const atmFactor = inAtm ? Math.max(0, 1 - alt / atmCeiling) : 0;
 
   // --- Sky (above horizon) ---
+  // Day/night colour depends on whether the launch site faces the sun. We
+  // compute the dot product between the local "up" at the camera position
+  // and the sun direction — positive = day, negative = night (lit only by
+  // stars and a thin twilight band).
+  const sunAng = (window.game && window.game.sunAngle !== undefined) ? window.game.sunAngle : 0;
+  const upDx = -dx, upDy = -dy;            // from craft toward body centre, then negate so up points away
+  const upR = Math.sqrt(upDx * upDx + upDy * upDy) || 1;
+  const upX = -upDx / upR, upY = -upDy / upR;       // local "up" in world frame
+  const sunDot = upX * Math.cos(sunAng) + upY * Math.sin(sunAng);
+  const dayLevel = (sunDot + 1) / 2;        // 0 = midnight, 1 = noon
   if (atmFactor > 0.01 || horizonY < h) {
     const skyGrad = ctx.createLinearGradient(0, 0, 0, Math.min(horizonY, h));
-    skyGrad.addColorStop(0, `rgba(0,0,10,${0.1 + 0.55 * atmFactor})`);
+    const topAlpha = 0.1 + 0.55 * atmFactor * (1 - dayLevel * 0.4);
+    skyGrad.addColorStop(0, `rgba(0,0,10,${topAlpha})`);
     if (body.atmosphereColor && atmFactor > 0) {
-      skyGrad.addColorStop(0.55, rgba(body.atmosphereColor, 0.2 * atmFactor));
-      skyGrad.addColorStop(1.0, rgba(body.atmosphereColor, 0.75 * atmFactor));
+      const dayMul = 0.3 + 0.7 * dayLevel;       // night: 0.3, day: 1.0
+      skyGrad.addColorStop(0.55, rgba(body.atmosphereColor, 0.2 * atmFactor * dayMul));
+      skyGrad.addColorStop(1.0, rgba(body.atmosphereColor, 0.75 * atmFactor * dayMul));
     } else {
       skyGrad.addColorStop(1, 'rgba(0,0,10,0.15)');
     }

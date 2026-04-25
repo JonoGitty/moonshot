@@ -33,6 +33,20 @@ function moonEclipticLongitude(jd) {
   const L = 218.3165 + 13.17639648 * (jd - 2451545.0);
   return ((L % 360) + 360) % 360;
 }
+
+// Sun's ecliptic longitude given Julian Date — Meeus approximate. Used to
+// place the sun for time-of-day lighting at each mission's real launch time.
+function sunEclipticLongitude(jd) {
+  const T = (jd - 2451545.0) / 36525;                  // Julian centuries from J2000
+  const L0 = 280.46646 + 36000.76983 * T;             // mean longitude
+  const M  = 357.52911 + 35999.05029 * T;             // mean anomaly
+  const Mr = M * Math.PI / 180;
+  const C = (1.914602 - 0.004817 * T) * Math.sin(Mr)
+          + (0.019993 - 0.000101 * T) * Math.sin(2 * Mr)
+          + 0.000289 * Math.sin(3 * Mr);
+  const lon = (L0 + C) % 360;
+  return ((lon % 360) + 360) % 360;
+}
 function dateToJD(year, month, day, hourUT) {
   // Valid for dates after 1582. From Meeus.
   if (month <= 2) { year -= 1; month += 12; }

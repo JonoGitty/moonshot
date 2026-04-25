@@ -180,9 +180,15 @@ function setupMissionPlanner() {
     verdictEl.textContent = result.ok ? '✓ GO' : '✗ NO-GO';
     verdictEl.className = 'stat-value ' + (result.ok ? 'good' : 'bad');
 
-    // Warnings
+    // Errors first (red), then warnings (amber)
     const warnEl = document.getElementById('planner-warnings');
     warnEl.innerHTML = '';
+    for (const e of (result.errors || [])) {
+      const div = document.createElement('div');
+      div.className = 'planner-error';
+      div.textContent = '✗ ' + e;
+      warnEl.appendChild(div);
+    }
     for (const w of result.warnings) {
       const div = document.createElement('div');
       div.className = 'planner-warning';
@@ -216,6 +222,12 @@ function setupMissionPlanner() {
 
     launchBtn.disabled = !result.ok;
     launchBtn.style.opacity = result.ok ? '1' : '0.5';
+
+    // Trajectory preview canvas
+    const canvas = document.getElementById('planner-canvas');
+    if (canvas && window.drawTrajectoryPreview) {
+      window.drawTrajectoryPreview(canvas, result, result.blueprint);
+    }
   }
 
   function launch() {
@@ -286,10 +298,13 @@ function startMission(shipKey) {
   // Compute Moon's starting angle from the mission's real launch date so
   // the real trajectory actually works out (TLI phase angle correct, etc.)
   let moonStartAngleRad = 0;
+  let sunAngleRad = 0;
   if (blueprint.briefing && blueprint.briefing.launchJD) {
     const lonDeg = moonEclipticLongitude(blueprint.briefing.launchJD);
     moonStartAngleRad = lonDeg * Math.PI / 180;
+    sunAngleRad = sunEclipticLongitude(blueprint.briefing.launchJD) * Math.PI / 180;
   }
+  window.game.sunAngle = sunAngleRad;
   const moonCos = Math.cos(moonStartAngleRad);
   const moonSin = Math.sin(moonStartAngleRad);
   window.game.moon = new Body({

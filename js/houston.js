@@ -117,6 +117,39 @@ class HoustonAssist {
 
     if (this.mode === 'auto') this.runAutopilot(dt);
     this.checkPhaseCallouts(c);
+    // Adaptive narration when flying a planned mission — every 10 sec sim time
+    if (c.blueprint.plannedBurns) {
+      this._planNarrTimer = (this._planNarrTimer || 0) + dt;
+      if (this._planNarrTimer > 10) {
+        this._planNarrTimer = 0;
+        this.checkPlanAdherence(c);
+      }
+    }
+  }
+
+  // Compare actual orbit to planned profile. Houston narrates if drifting.
+  checkPlanAdherence(c) {
+    const profile = c.blueprint.profile || {};
+    const D = this.dialog;
+    const altE = this.game.earth.altitude(c.pos);
+    if (c.milestones.reachedOrbit && c.apoE !== null && c.periE !== null) {
+      // Compare to target orbit
+      if (profile.targetApo) {
+        const apoErr = (c.apoE - profile.targetApo) / 1000;
+        const periErr = (c.periE - profile.targetPeri) / 1000;
+        if (Math.abs(apoErr) < 50 && Math.abs(periErr) < 50 && !this.fired.has('plan-on-track')) {
+          this.callout('plan-on-track', `${D.callsign}: Orbit on profile — apo ${(c.apoE/1000).toFixed(0)} km, peri ${(c.periE/1000).toFixed(0)} km. Locked in.`, 'go');
+        }
+      }
+    }
+    // Drift warnings during ascent
+    if (!c.milestones.reachedOrbit && altE > 80e3 && c.apoE !== null) {
+      const apoTargetKm = (profile.targetApo || 0) / 1000;
+      const apoKm = c.apoE / 1000;
+      if (apoTargetKm && apoKm < apoTargetKm * 0.5 && altE > 100e3 && !this.fired.has('plan-apo-low')) {
+        this.callout('plan-apo-low', `${D.callsign}: Apoapsis trending low — ${apoKm.toFixed(0)} km vs target ${apoTargetKm.toFixed(0)} km. Hold prograde, extend the burn.`, 'warn');
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -862,11 +895,15 @@ class HoustonAssist {
       }
 
       case 'deorbit-burn': {
-        // Burn retrograde to drop periapsis into the atmosphere
+        // Burn retrograde to drop periapsis into the atmosphere. For the
+        // Shuttle we drop peri much lower so the lifting body has time to
+        // bleed off energy through the upper atmosphere instead of skipping.
+        const isShuttle = c.capsule.shape === 'shuttle-orbiter';
+        const periTarget = isShuttle ? -200e3 : 40e3;
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x) + Math.PI, dt);
         c.throttle = 1.0;
-        if (c.periE !== null && c.periE < 40e3) {
+        if (c.periE !== null && c.periE < periTarget) {
           c.throttle = 0;
           this.autoPhase = 'reentry-prep';
           this.callout('auto-deorbit-cut', `${D.callsign}: De-orbit burn complete. Falling into the atmosphere.`, 'go');

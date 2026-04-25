@@ -277,21 +277,29 @@ function planMission(missionKey, params, shipKey) {
   const twr = liftoffTWR(blueprint);
 
   const warnings = [];
+  const errors = [];        // hard fails — verdict is NO-GO regardless of Δv
   if (twr < 1.05) warnings.push(`TWR at liftoff is ${twr.toFixed(2)} — under 1.1 means heavy gravity losses or no liftoff`);
   if (dvAvailable < dvNeeded) warnings.push(`Insufficient Δv: needs ${(dvNeeded/1000).toFixed(2)} km/s, have ${(dvAvailable/1000).toFixed(2)} km/s`);
   const margin = dvAvailable - dvNeeded;
   if (margin > 0 && margin < 500) warnings.push(`Δv margin is only ${margin.toFixed(0)} m/s — risky`);
 
-  // Mission-specific sanity checks
+  // Mission-specific sanity checks. ERRORS hard-fail; WARNINGS just flag.
   if (missionKey === 'moonOrbit' || missionKey === 'moonLand') {
-    if (p.lunarAlt < 30) warnings.push(`Lunar orbit altitude ${p.lunarAlt} km is below safe minimum (30 km) — autopilot will impact`);
-    if (p.lunarAlt < 60) warnings.push(`Lunar orbit altitude ${p.lunarAlt} km is below the mascon-stable threshold (~60 km) — orbit will decay`);
+    if (p.lunarAlt < 30) errors.push(`Lunar orbit at ${p.lunarAlt} km is impossible — Moon mountains reach ~10 km, autopilot will impact. Min 30 km.`);
+    else if (p.lunarAlt < 60) warnings.push(`Lunar orbit at ${p.lunarAlt} km is below the mascon-stable threshold (~60 km) — orbit may decay`);
   }
-  if (missionKey === 'leo' && p.altitude < 200) warnings.push(`LEO altitude ${p.altitude} km is in atmosphere drag zone — orbit will decay rapidly`);
-  if (missionKey === 'leo' && p.altitude > 1500) warnings.push(`Above 1500 km is in the Van Allen belts — radiation hazard`);
+  if (missionKey === 'leo') {
+    if (p.altitude < 160) errors.push(`LEO at ${p.altitude} km is below 160 km — atmosphere drag will deorbit immediately.`);
+    else if (p.altitude < 200) warnings.push(`LEO at ${p.altitude} km is in atmosphere drag zone — orbit will decay`);
+    if (p.altitude > 1500) warnings.push(`Above 1500 km enters the Van Allen belts — radiation hazard`);
+  }
+  if (missionKey === 'moonOrbit' && p.lunarOrbits < 1) errors.push('Need at least 1 lunar orbit.');
+  if (missionKey === 'moonLand' && p.staySec < 30) warnings.push(`Surface stay ${p.staySec} s is very short — autopilot may not finish lunar walk before re-launch`);
 
   return {
-    ok: dvAvailable >= dvNeeded && twr >= 1.05,
+    ok: dvAvailable >= dvNeeded && twr >= 1.05 && errors.length === 0,
+    errors,
+    missionKey,
     mission,
     blueprint,
     paramValues: p,
@@ -341,6 +349,170 @@ function profileFor(missionKey, p) {
   }
 }
 
+// Render a top-down trajectory preview to a canvas. Shows Earth, parking
+// orbit, transfer ellipse, target orbit, Moon (at launch position), and
+// burn-point markers colour-coded by phase.
+function drawTrajectoryPreview(canvas, plan, blueprint) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.fillStyle = '#020812';
+  ctx.fillRect(0, 0, w, h);
+
+  // Decide bounds: include Earth and (if mission goes there) Moon
+  const goesToMoon = ['moonFlyby', 'moonOrbit', 'moonLand'].includes(plan.missionKey);
+  const goesToGEO = plan.missionKey === 'geo';
+  let maxR;
+  if (goesToMoon) maxR = MOON_DISTANCE * 1.15;
+  else if (goesToGEO) maxR = 50e6;
+  else maxR = (EARTH_RADIUS + (plan.profile.targetApo || 400e3)) * 4;
+
+  const cx = w / 2;
+  const cy = h / 2;
+  const scale = Math.min(w, h) * 0.45 / maxR;
+
+  // Stars
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 80; i++) {
+    const sx = (Math.sin(i * 12.9898) * 43758.5453) % 1 * w;
+    const sy = (Math.sin(i * 78.233) * 28491.5453) % 1 * h;
+    const a = 0.2 + 0.6 * ((Math.sin(i * 41.5) * 1000) % 1);
+    ctx.globalAlpha = a;
+    ctx.fillRect(((sx % w) + w) % w, ((sy % h) + h) % h, 1, 1);
+  }
+  ctx.globalAlpha = 1;
+
+  // Moon orbit (if relevant)
+  if (goesToMoon) {
+    ctx.strokeStyle = 'rgba(140, 140, 180, 0.3)';
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, MOON_DISTANCE * scale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Earth
+  const earthR = Math.max(8, EARTH_RADIUS * scale);
+  const eg = ctx.createRadialGradient(cx - earthR * 0.2, cy - earthR * 0.2, 0, cx, cy, earthR);
+  eg.addColorStop(0, '#5aa0d8'); eg.addColorStop(1, '#1f4870');
+  ctx.fillStyle = eg;
+  ctx.beginPath(); ctx.arc(cx, cy, earthR, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#9cd';
+  ctx.font = '10px monospace';
+  ctx.fillText('EARTH', cx + earthR + 4, cy + 4);
+
+  // Parking orbit (start)
+  if (plan.profile.targetApo) {
+    const r = EARTH_RADIUS + plan.profile.targetApo;
+    ctx.strokeStyle = '#6f6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, r * scale, 0, Math.PI * 2); ctx.stroke();
+    label(ctx, cx + r * scale + 4, cy - 8, 'PARKING', '#6f6');
+  }
+
+  // Transfer ellipse to Moon (Hohmann)
+  if (goesToMoon) {
+    const r0 = EARTH_RADIUS + plan.profile.targetApo;
+    const aT = (r0 + MOON_DISTANCE) / 2;
+    const eT = (MOON_DISTANCE - r0) / (MOON_DISTANCE + r0);
+    const bT = aT * Math.sqrt(1 - eT * eT);
+    ctx.strokeStyle = '#ff6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    // Centre of ellipse is offset by aT*eT toward Moon
+    ctx.ellipse(cx + aT * eT * scale, cy, aT * scale, bT * scale, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    label(ctx, cx + aT * scale - 50, cy - bT * scale - 4, 'TRANS-LUNAR', '#ff6');
+
+    // Moon at intercept (target ahead by 114° at launch — Hohmann phase angle)
+    const moonAng = 0;        // Moon shown at intercept point
+    const mx = cx + MOON_DISTANCE * Math.cos(moonAng) * scale;
+    const my = cy + MOON_DISTANCE * Math.sin(moonAng) * scale;
+    const mR = Math.max(4, MOON_RADIUS * scale * 6);     // exaggerate for visibility
+    const mg = ctx.createRadialGradient(mx - mR * 0.3, my - mR * 0.3, 0, mx, my, mR);
+    mg.addColorStop(0, '#dadada'); mg.addColorStop(1, '#6a6a6a');
+    ctx.fillStyle = mg;
+    ctx.beginPath(); ctx.arc(mx, my, mR, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ccc';
+    ctx.fillText('MOON', mx + mR + 4, my + 4);
+
+    // Lunar orbit ring (if applicable)
+    if (plan.profile.lunarApo) {
+      const lR = MOON_RADIUS + plan.profile.lunarApo;
+      const lRpx = Math.max(8, lR * scale * 6);
+      ctx.strokeStyle = '#f66';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(mx, my, lRpx, 0, Math.PI * 2); ctx.stroke();
+      label(ctx, mx + lRpx + 4, my - mR - 4, `LUNAR ${(plan.profile.lunarApo/1000).toFixed(0)}km`, '#f66');
+    }
+
+    // Burn-point markers along the trajectory
+    burnDot(ctx, cx + EARTH_RADIUS * scale + 6, cy - 4, '#6f6', 'TLI');
+    burnDot(ctx, mx, my + mR + 14, '#f66', 'LOI');
+  } else if (goesToGEO) {
+    const rGEO = 42164e3;
+    ctx.strokeStyle = '#fc6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, rGEO * scale, 0, Math.PI * 2); ctx.stroke();
+    label(ctx, cx + rGEO * scale + 4, cy + 4, 'GEO', '#fc6');
+    // Hohmann transfer from parking
+    const r0 = EARTH_RADIUS + plan.profile.targetApo;
+    const aT = (r0 + rGEO) / 2;
+    const eT = (rGEO - r0) / (rGEO + r0);
+    const bT = aT * Math.sqrt(1 - eT * eT);
+    ctx.strokeStyle = '#ff6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(cx + aT * eT * scale, cy, aT * scale, bT * scale, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    label(ctx, cx + aT * scale - 30, cy - bT * scale - 4, 'GTO', '#ff6');
+  } else if (plan.missionKey === 'iss') {
+    // ISS sits in the same orbit as parking — show as a marker
+    const r = EARTH_RADIUS + 408e3;
+    const ix = cx + r * scale * Math.cos(Math.PI / 6);
+    const iy = cy + r * scale * Math.sin(Math.PI / 6);
+    ctx.strokeStyle = '#8cf'; ctx.fillStyle = '#8cf'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ix - 6, iy); ctx.lineTo(ix + 6, iy);
+    ctx.moveTo(ix, iy - 6); ctx.lineTo(ix, iy + 6); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ix, iy, 3, 0, Math.PI * 2); ctx.fill();
+    label(ctx, ix + 8, iy + 4, 'ISS 408 km', '#8cf');
+  }
+
+  // Launch point arrow
+  ctx.fillStyle = '#ff8';
+  ctx.beginPath();
+  ctx.arc(cx + EARTH_RADIUS * scale, cy, 3, 0, Math.PI * 2);
+  ctx.fill();
+  label(ctx, cx + EARTH_RADIUS * scale + 4, cy + 12, 'LAUNCH', '#ff8');
+
+  // Phase legend (top-left)
+  let ly = 14;
+  legend(ctx, 10, ly, '#6f6', 'parking orbit'); ly += 14;
+  if (goesToMoon || goesToGEO) { legend(ctx, 10, ly, '#ff6', 'transfer trajectory'); ly += 14; }
+  if (goesToMoon)              { legend(ctx, 10, ly, '#f66', 'lunar orbit'); ly += 14; }
+  legend(ctx, 10, ly, '#ff8', 'launch point');
+}
+
+function label(ctx, x, y, text, col) {
+  ctx.fillStyle = col;
+  ctx.font = '10px monospace';
+  ctx.fillText(text, x, y);
+}
+function burnDot(ctx, x, y, col, txt) {
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = col; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.stroke();
+  label(ctx, x + 9, y + 4, txt, col);
+}
+function legend(ctx, x, y, col, txt) {
+  ctx.fillStyle = col; ctx.fillRect(x, y - 5, 18, 2);
+  ctx.fillStyle = '#aec'; ctx.font = '10px monospace';
+  ctx.fillText(txt, x + 24, y);
+}
+
 window.planMission = planMission;
 window.MISSION_CATALOG = MISSION_CATALOG;
 window.rocketDeltaV = rocketDeltaV;
+window.drawTrajectoryPreview = drawTrajectoryPreview;

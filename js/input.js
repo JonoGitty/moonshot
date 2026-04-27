@@ -26,6 +26,19 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
+  // Shift+F toggles fullscreen. Handled before the switch so it doesn't
+  // collide with `f` (SAS: FREE). Browsers require a user gesture.
+  if (e.shiftKey && key === 'f') {
+    if (!document.fullscreenElement) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+    return;
+  }
+
   // Pilot intervention disengages autopilot for control-grabbing keys
   const isPilotControl = [' ', 'z', 'x', 'g'].includes(key);
   if (isPilotControl && window.game.houston && window.game.houston.mode === 'auto') {
@@ -88,6 +101,8 @@ document.addEventListener('keydown', (e) => {
     case 'm':
       window.game.mapMode = !window.game.mapMode;
       break;
+
+    // Shift+F is handled before the lowercase switch — see top of handler.
 
     case 'p':
       if (window.game.state === 'flight') {

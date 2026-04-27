@@ -907,11 +907,12 @@ class HoustonAssist {
       }
 
       case 'deorbit-burn': {
-        // Burn retrograde to drop periapsis into the atmosphere. For the
-        // Shuttle we drop peri much lower so the lifting body has time to
-        // bleed off energy through the upper atmosphere instead of skipping.
+        // Burn retrograde to drop periapsis into the atmosphere. The Shuttle
+        // drops peri to ~50 km — a real STS deorbit aimed for the entry
+        // interface at 122 km on a shallow glideslope. Steeper than that and
+        // the lifting body slams in; shallower and it skip-entries.
         const isShuttle = c.capsule.shape === 'shuttle-orbiter';
-        const periTarget = isShuttle ? -200e3 : 40e3;
+        const periTarget = isShuttle ? 50e3 : 40e3;
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x) + Math.PI, dt);
         c.throttle = 1.0;

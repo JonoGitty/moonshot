@@ -769,8 +769,8 @@ const SPACECRAFT = {
       thrust: 53e3,
       isp: 313,
       ispVac: 313,
-      dragCoeff: 1.2,                     // blunt lifting body, high drag on entry
-      area: 60,                            // big belly tile area
+      dragCoeff: 1.5,                     // high-alpha blunt body
+      area: 250,                          // real Orbiter projected area at 40° AoA
       length: 37,
       diameter: 24,                       // Real Orbiter wingspan ~24 m
       // Real tile temp ~1650°C but our 2D Sutton-Graves runs hot — give the
@@ -780,9 +780,11 @@ const SPACECRAFT = {
       // ~100 m/s (360 km/h) with drag chute deployed on rollout.
       parachuteDrag: 0,
       parachuteAlt: 0,
-      // Spaceplane glide: lift-to-drag ratio. Higher L/D = shallower glide,
-      // less likely to dive too steep into thick atmosphere.
-      liftCoeff: 1.2,
+      // Spaceplane glide: lift-to-drag ratio. Real Shuttle L/D ≈ 1 hypersonic,
+      // 4.5 subsonic. We use 0.6 hypersonic so the craft actually descends,
+      // and the autopilot reduces AoA at lower altitude where drag is large
+      // enough that lift would otherwise force a skip-out.
+      liftCoeff: 0.6,
       // Max safe touchdown speed (m/s). Real Shuttle main-gear touchdown
       // ~95 m/s; we allow up to 200 because our 2D physics doesn't model
       // the drag chute + wheel brakes that decelerate on the ground.

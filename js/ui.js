@@ -187,6 +187,24 @@ function updateHUD() {
   setText('info-moon-dist', fmtDist(altM));
   setText('info-throttle', Math.round(c.throttle * 100) + '%');
 
+  // Δv remaining for the active engine (Tsiolkovsky against current mass).
+  // Uses vacuum Isp — gives a bound that's accurate in space and slightly
+  // optimistic in atmosphere. Real flight manuals quote vacuum Δv too.
+  const active = c.getActive();
+  if (active && active.fuelMass > 0 && active.currentFuel > 0) {
+    const isp = active.ispVac || active.isp || 300;
+    const massNow = c.getCurrentMass();
+    const massDry = massNow - active.currentFuel;
+    if (massDry > 0 && massNow > massDry) {
+      const dv = isp * G0 * Math.log(massNow / massDry);
+      setText('info-dv', (dv / 1000).toFixed(2) + ' km/s');
+    } else {
+      setText('info-dv', '—');
+    }
+  } else {
+    setText('info-dv', '—');
+  }
+
   // Heat display with colour
   const heatT = c.capsule.temperature.toFixed(0);
   const heatMax = c.capsule.maxTemp;

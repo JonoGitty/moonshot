@@ -13,6 +13,52 @@ MAJOR = breaking change.
 
 Tracked in `docs/PLAN.md`.
 
+## [0.5.2] — 2026-04-28
+Briefing trajectory previews for stock missions, manual-flight HUD upgrades,
+expanded route-adherence narration, autopilot warp-tuning for landing/ascent,
+and a CSS scope fix so the briefing canvas doesn't blow up.
+
+### Fixed
+- **Briefing canvas was rendering full-screen** because `style.css` had a
+  global `canvas { position: fixed; inset: 0 }` rule (intended for the
+  `#game` canvas). Scoped the rule to `#game` only and added a proper
+  `#briefing-canvas` block inside the briefing modal. Validated with the
+  new `test-briefing-sizes.mjs` (modal vs. viewport check across all 10
+  ships).
+
+### Added
+- **Stock missions get a flight-plan trajectory preview** in the briefing
+  modal. Vostok / Falcon 9 / Shuttle / Soyuz / Saturn V / SLS / Artemis II /
+  X-1 sandbox each get an inline planner-rendered map with parking orbit,
+  transfer ellipse, lunar orbit, and burn-point markers. Mercury (suborbital)
+  and Sputnik (orbit-only deploy) deliberately have no preview — there's no
+  meaningful trajectory to draw.
+- **Stock missions now have `plannedBurns`** attached at mission start
+  (`js/game.js:attachStockPlan`). This unlocks Houston's per-burn
+  route-adherence narration for every ship that flies a real profile,
+  not just the custom planner.
+- **Per-burn route-adherence narration** in `houston.js:checkPlanAdherence`:
+  TLI prep + on-profile, LOI prep + capture confirm, powered-descent commit,
+  ascent-into-orbit confirm, TEI clear, ISS dock confirm. Old narration
+  (orbit on profile / apo trending low) is preserved.
+- **Δv-remaining HUD field** (`Δv STAGE`) showing Tsiolkovsky-derived Δv
+  for the active engine. Updates every frame; surfaces the same number
+  the planner uses for verdict, so manual pilots can budget burns.
+- `test-briefing-sizes.mjs` — Playwright smoke test that opens each ship's
+  briefing and reports the canvas size + modal dimensions.
+
+### Changed
+- **Lunar autopilot warp-tuning** for landing + ascent phases. Descent at
+  altM > 8 km now runs at 5× warp (was 1×) — predictable retrograde burn,
+  drops ~5 min wall-clock from a Saturn V mission. Lunar-ascent above
+  altM=2 km also bumped to 5×. Together with the LOI-approach 100× cruise
+  tier in v0.5.1, this is intended to bring full Apollo land+ascend+splash
+  inside the bumped 5400s wall-clock CI budget (validation pending).
+- **Test budgets** for lunar missions raised: Saturn V 3000s → 5400s,
+  SLS / Artemis II 3000s → 4200s. The full real Apollo timeline doesn't
+  compress below ~80 min wall-clock even under aggressive warp because
+  descent / ascent / re-entry must run at near-realtime for stability.
+
 ## [0.5.1] — 2026-04-28
 Lunar capture autopilot bug fixed, warp ladder works for wide orbits, repo
 now has actual versioning discipline.
@@ -146,7 +192,8 @@ Initial commit.
 - Soyuz fast-rendezvous with snap-to-ISS (3-h sim time).
 - Re-entry, parachute deploy, Shuttle runway landing.
 
-[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/JonoGitty/moonshot/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/JonoGitty/moonshot/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/JonoGitty/moonshot/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/JonoGitty/moonshot/compare/v0.3.0...v0.4.0

@@ -26,6 +26,7 @@
       <div class="hud-row"><span class="hud-label">MOON DIST</span><span id="info-moon-dist" class="hud-value">—</span></div>
       <div class="divider"></div>
       <div class="hud-row"><span class="hud-label">THROTTLE</span><span id="info-throttle" class="hud-value">0%</span></div>
+      <div class="hud-row"><span class="hud-label">Δv STAGE</span><span id="info-dv" class="hud-value">—</span></div>
       <div class="hud-row"><span class="hud-label">HEAT</span><span id="info-heat" class="hud-value">0°C</span></div>
       <div class="hud-row"><span class="hud-label">G-FORCE</span><span id="info-g" class="hud-value">1.0 g</span></div>
     </div>
@@ -249,6 +250,7 @@
       <p class="briefing-quote" id="briefing-quote"></p>
 
       <div class="briefing-section-title">FLIGHT PLAN</div>
+      <canvas id="briefing-canvas" width="780" height="280" style="display:none;"></canvas>
       <div class="briefing-phases" id="briefing-phases"></div>
 
       <div class="briefing-footer">

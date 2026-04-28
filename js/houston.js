@@ -127,13 +127,19 @@ class HoustonAssist {
     }
   }
 
-  // Compare actual orbit to planned profile. Houston narrates if drifting.
+  // Compare actual flight state to planned profile. Houston narrates each
+  // major burn (TLI, LOI, descent, ascent, TEI, deorbit) and flags drift.
+  // Fires from both ASSIST and AUTOPILOT — the manual pilot benefits more.
   checkPlanAdherence(c) {
     const profile = c.blueprint.profile || {};
+    const burns = c.blueprint.plannedBurns || [];
     const D = this.dialog;
     const altE = this.game.earth.altitude(c.pos);
+    const altM = this.game.moon.altitude(c.pos);
+    const findBurn = (substr) => burns.find(b => (b.phase || '').toLowerCase().includes(substr));
+
+    // ---- LEO insertion ----
     if (c.milestones.reachedOrbit && c.apoE !== null && c.periE !== null) {
-      // Compare to target orbit
       if (profile.targetApo) {
         const apoErr = (c.apoE - profile.targetApo) / 1000;
         const periErr = (c.periE - profile.targetPeri) / 1000;
@@ -149,6 +155,69 @@ class HoustonAssist {
       if (apoTargetKm && apoKm < apoTargetKm * 0.5 && altE > 100e3 && !this.fired.has('plan-apo-low')) {
         this.callout('plan-apo-low', `${D.callsign}: Apoapsis trending low — ${apoKm.toFixed(0)} km vs target ${apoTargetKm.toFixed(0)} km. Hold prograde, extend the burn.`, 'warn');
       }
+    }
+
+    // ---- TLI (trans-lunar injection) ----
+    const tli = findBurn('tli');
+    if (tli && c.milestones.reachedOrbit && !this.fired.has('plan-tli-prep')
+        && c.apoE !== null && c.apoE < MOON_DISTANCE * 0.6) {
+      this.callout('plan-tli-prep',
+        `${D.callsign}: TLI burn pending — target Δv ${tli.dv.toFixed(0)} m/s prograde, raise apo to Moon distance (~384 Mm).`,
+        'info');
+    }
+    if (tli && !this.fired.has('plan-tli-go') && c.apoE !== null && c.apoE > MOON_DISTANCE * 0.95) {
+      this.callout('plan-tli-go',
+        `${D.callsign}: TLI on profile — apo ${(c.apoE/1000000).toFixed(1)} Mm reaching Moon distance. Cut throttle when nominal.`,
+        'go');
+    }
+
+    // ---- LOI (lunar orbit insertion) ----
+    const loi = findBurn('loi');
+    if (loi && altM < MOON_SOI && altM > 0 && !this.fired.has('plan-loi-prep')) {
+      this.callout('plan-loi-prep',
+        `${D.callsign}: LOI burn pending — Δv ${loi.dv.toFixed(0)} m/s retrograde to Moon. Aim for ${profile.lunarApo ? (profile.lunarApo/1000).toFixed(0) + ' km' : 'low lunar orbit'}.`,
+        'info');
+    }
+    if (loi && c.periM !== null && c.apoM !== null
+        && c.apoM < MOON_SOI && c.periM > 30e3
+        && !this.fired.has('plan-loi-done')) {
+      this.callout('plan-loi-done',
+        `${D.callsign}: LOI captured — peri ${(c.periM/1000).toFixed(0)} km, apo ${(c.apoM/1000).toFixed(0)} km. Lunar orbit on profile.`,
+        'go');
+    }
+
+    // ---- Descent + landing ----
+    const desc = findBurn('descent') || findBurn('powered descent');
+    if (desc && c.milestones.enteredMoonOrbit && altM < 30e3
+        && !c.milestones.landedOnMoon && !this.fired.has('plan-desc-on')) {
+      this.callout('plan-desc-on',
+        `${D.callsign}: Powered descent committed. Δv ${desc.dv.toFixed(0)} m/s — bleed velocity, modulate for soft touchdown.`,
+        'info');
+    }
+
+    // ---- Lunar ascent ----
+    const asc = findBurn('ascent') || findBurn('lunar ascent');
+    if (asc && c.milestones.launchedFromMoon && c.periM !== null && c.periM > 10e3
+        && !this.fired.has('plan-asc-orbit')) {
+      this.callout('plan-asc-orbit',
+        `${D.callsign}: Ascent stage in lunar orbit — peri ${(c.periM/1000).toFixed(0)} km. Standby for rendezvous + TEI.`,
+        'go');
+    }
+
+    // ---- TEI (trans-Earth injection) ----
+    const tei = findBurn('tei') || findBurn('trans-earth') || findBurn('return');
+    if (tei && c.milestones.launchedFromMoon && altM > MOON_SOI * 0.3
+        && !this.fired.has('plan-tei-go')) {
+      this.callout('plan-tei-go',
+        `${D.callsign}: TEI complete — Moon SOI clearing. Coast home, ~3 days at max warp.`,
+        'go');
+    }
+
+    // ---- ISS dock ----
+    if (c.milestones.dockedWithISS && !this.fired.has('plan-iss-done')) {
+      this.callout('plan-iss-done',
+        `${D.callsign}: Docked with ISS — primary objective achieved.`,
+        'go');
     }
   }
 
@@ -727,11 +796,20 @@ class HoustonAssist {
         const moonG = G * m.mass / (m.radius * m.radius);
 
         // Two-phase descent:
-        //   High: kill most horizontal velocity at full throttle
-        //   Low:  hover-descent, modulate to touch down softly
+        //   High: kill most horizontal velocity at full throttle (5× warp safe —
+        //         high above lunar surface, predictable trajectory)
+        //   Low:  hover-descent at 1× warp — terrain proximity demands precision
         if (altM > 8e3) {
           c.throttle = 1.0;
+          if (this.game.timeWarpIdx !== 2) {
+            this.game.timeWarpIdx = 2;                  // 5×
+            this.game.timeWarp = TIME_WARP_LEVELS[2];
+          }
         } else {
+          if (this.game.timeWarpIdx !== 0) {
+            this.game.timeWarpIdx = 0;                  // 1× for terminal
+            this.game.timeWarp = TIME_WARP_LEVELS[0];
+          }
           // Radial (upward) component of velocity (positive = rising)
           const radial = Vec.norm(Vec.sub(c.pos, m.pos));
           const vRadial = Vec.dot(vRelM, radial);
@@ -783,6 +861,13 @@ class HoustonAssist {
         else pitchDeg = 90 * (1 - (altM - 5e3) / 55e3);
         const target = upAngle * (pitchDeg / 90) + eastAngle * (1 - pitchDeg / 90);
         this.steerTo(target, dt);
+
+        // 5× warp once clear of immediate surface — predictable burn
+        const warpTarget = altM > 2e3 ? 2 : 0;
+        if (this.game.timeWarpIdx !== warpTarget) {
+          this.game.timeWarpIdx = warpTarget;
+          this.game.timeWarp = TIME_WARP_LEVELS[warpTarget];
+        }
 
         // Once we have a stable moon orbit, rendezvous with the CSM ghost
         // (if we're Apollo and CSM is waiting in orbit), then TEI.

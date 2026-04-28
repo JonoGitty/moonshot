@@ -8,7 +8,10 @@ body {
   color: #8eff8e;
   user-select: none; -webkit-user-select: none;
 }
-canvas { display: block; position: fixed; inset: 0; background: #000; cursor: crosshair; }
+/* Main game canvas — positioned full-screen behind the HUD. Other canvases
+ * (briefing trajectory preview, planner) sit inside their parent panels and
+ * use default static positioning. */
+#game { display: block; position: fixed; inset: 0; background: #000; cursor: crosshair; }
 
 .hidden { display: none !important; }
 
@@ -333,6 +336,15 @@ canvas { display: block; position: fixed; inset: 0; background: #000; cursor: cr
   background: radial-gradient(ellipse at center, #001020 0%, #000000 70%);
   display: flex; align-items: center; justify-content: center;
   z-index: 15; overflow-y: auto; padding: 40px 20px;
+}
+#briefing-canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0 16px 0;
+  border: 1px solid rgba(108, 200, 255, 0.3);
+  background: #020812;
 }
 .briefing-inner {
   max-width: 760px; width: 100%;

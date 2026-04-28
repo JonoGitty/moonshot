@@ -15,9 +15,16 @@ const MISSIONS = {
   falcon9:  { budgetS: 1800, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
   shuttle:  { budgetS: 1800, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
   soyuz:    { budgetS: 1800, expect: ['leftPad', 'reachedOrbit', 'dockedWithISS', 'landedOnEarth'] },
-  saturn5:  { budgetS: 3000, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'landedOnMoon', 'launchedFromMoon', 'landedOnEarth'] },
-  sls:      { budgetS: 3000, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit', 'landedOnEarth'] },
-  artemis2: { budgetS: 3000, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit', 'landedOnEarth'] },
+  // Lunar missions need bigger wall-clock budgets — Apollo's full real
+  // timeline (ascent → parking orbit → TLI → 3-day coast → LOI → 3 lunar
+  // orbits → descent → surface stay → ascent → rendezvous → TEI → 3-day
+  // coast → re-entry → splashdown) compresses to ~80 min real time even
+  // under aggressive warp because descent / ascent / re-entry must run
+  // at 1× for stability. SLS / Artemis II don't need to land so fit in
+  // less, but still need the 3-day coast home.
+  saturn5:  { budgetS: 5400, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'landedOnMoon', 'launchedFromMoon', 'landedOnEarth'] },
+  sls:      { budgetS: 4200, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit', 'landedOnEarth'] },
+  artemis2: { budgetS: 4200, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit', 'landedOnEarth'] },
 };
 
 // Fresh context per mission — reusing one page across all 9 ships causes the

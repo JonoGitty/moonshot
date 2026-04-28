@@ -67,8 +67,64 @@ function showBriefing(shipKey) {
     html += `<div class="phase-row"><span class="phase-idx">${i + 1}.</span><div><span class="phase-name">${p.name}</span>${sub}</div>${dir}${dv}</div>`;
   });
   document.getElementById('briefing-phases').innerHTML = html;
+
+  // Trajectory preview for stock missions: build a planner-style plan
+  // object on the fly and draw it. Hidden if no mapping exists or the
+  // ship is sandbox/satellite.
+  const briefingCanvas = document.getElementById('briefing-canvas');
+  if (briefingCanvas && window.drawTrajectoryPreview) {
+    const plan = stockPlanFor(blueprint, shipKey);
+    if (plan) {
+      briefingCanvas.style.display = '';
+      window.drawTrajectoryPreview(briefingCanvas, plan, blueprint);
+    } else {
+      briefingCanvas.style.display = 'none';
+    }
+  }
+
   document.getElementById('briefing').classList.remove('hidden');
   document.getElementById('menu').classList.add('hidden');
+}
+
+// Build a planner-shape object for stock missions so the briefing can
+// reuse drawTrajectoryPreview. Returns null for ships with no planner
+// mapping (sandbox, suborbital).
+function stockPlanFor(blueprint, shipKey) {
+  const m = blueprint.mission;
+  const profile = blueprint.profile || {};
+  let missionKey, params;
+  switch (m) {
+    case 'leo-return':
+      missionKey = 'leo';
+      params = { altitude: Math.round((profile.targetApo || 200e3) / 1000) };
+      break;
+    case 'iss-dock':
+      missionKey = 'iss'; params = {}; break;
+    case 'moon-flyby':
+      missionKey = 'moonFlyby';
+      params = { parkingAlt: Math.round((profile.targetApo || 200e3) / 1000) };
+      break;
+    case 'moon-orbit':
+      missionKey = 'moonOrbit';
+      params = {
+        parkingAlt: Math.round((profile.targetApo || 200e3) / 1000),
+        lunarAlt: Math.round((profile.lunarApo || 110e3) / 1000),
+        lunarOrbits: 2,
+      };
+      break;
+    case 'moon':
+      missionKey = 'moonLand';
+      params = {
+        parkingAlt: Math.round((profile.targetApo || 200e3) / 1000),
+        lunarAlt: Math.round((profile.lunarApo || 110e3) / 1000),
+        staySec: profile.lunarStaySec || 30,
+      };
+      break;
+    default: return null;
+  }
+  try {
+    return planMission(missionKey, params, shipKey);
+  } catch (e) { return null; }
 }
 
 function hideBriefing() {
@@ -267,9 +323,26 @@ function startPlannedMission(plan) {
   startMission('__custom');
 }
 
+// Attach a planner-derived burn schedule to stock missions so the in-flight
+// route-adherence narration + (future) trajectory overlay have something to
+// reference. The custom planner already does this for __custom missions
+// via startPlannedMission. Returns the blueprint unchanged if no mapping
+// exists (e.g. for the X-1 sandbox or suborbital hops).
+function attachStockPlan(blueprint, shipKey) {
+  if (blueprint.plannedBurns) return blueprint;        // already set (custom)
+  const plan = stockPlanFor(blueprint, shipKey);
+  if (plan && plan.phases) {
+    blueprint.plannedBurns = plan.phases;
+    blueprint.plannedBudget = plan.totalDv;
+    blueprint.plannedVerdict = plan.verdict;
+  }
+  return blueprint;
+}
+
 function startMission(shipKey) {
   const blueprint = SPACECRAFT[shipKey];
   if (!blueprint) return;
+  attachStockPlan(blueprint, shipKey);
 
   // --- Setup Earth (fixed at origin) ---
   window.game.earth = new Body({

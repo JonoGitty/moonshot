@@ -20,10 +20,15 @@ const MISSIONS = {
   artemis2: { budgetS: 3000, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit', 'landedOnEarth'] },
 };
 
-async function runMission(page, ship, budgetS) {
+// Fresh context per mission — reusing one page across all 9 ships causes the
+// JS heap to degrade enough that later ships (Soyuz/SLS/Saturn5) run at
+// sub-realtime sim ratios and time out. A new context is cheap and gives
+// each mission a clean V8 heap.
+async function runMission(browser, ship, budgetS) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
   const errors = [];
-  const pageErrHandler = e => errors.push(e.message);
-  page.on('pageerror', pageErrHandler);
+  page.on('pageerror', e => errors.push(e.message));
 
   await page.goto('http://127.0.0.1:8080/', { waitUntil: 'networkidle' });
   await page.waitForTimeout(200);
@@ -83,12 +88,11 @@ async function runMission(page, ship, budgetS) {
     if (st.state === 'ending') break;
   }
 
-  page.off('pageerror', pageErrHandler);
+  await ctx.close();
   return { lastState, checkpoints, errors };
 }
 
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 
 const only = process.argv[2];     // optional: one ship
 const ships = only ? [only] : Object.keys(MISSIONS);
@@ -96,7 +100,7 @@ const ships = only ? [only] : Object.keys(MISSIONS);
 for (const ship of ships) {
   const { budgetS, expect } = MISSIONS[ship];
   console.log(`\n=== ${ship.toUpperCase()} (budget ${budgetS}s) ===`);
-  const { lastState: st, checkpoints, errors } = await runMission(page, ship, budgetS);
+  const { lastState: st, checkpoints, errors } = await runMission(browser, ship, budgetS);
   if (!st) { console.log('FAIL — no final state'); continue; }
   const hit = expect.filter(k => st.milestones[k]);
   const missed = expect.filter(k => !st.milestones[k]);

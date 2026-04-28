@@ -1,0 +1,155 @@
+# Changelog
+
+All notable changes to MOONSHOT are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+PATCH = bug fix or numbers tweak.
+MINOR = new feature (new ship, new HUD widget, new mission type).
+MAJOR = breaking change.
+
+## [Unreleased]
+
+Tracked in `docs/PLAN.md`.
+
+## [0.5.1] — 2026-04-28
+Lunar capture autopilot bug fixed, warp ladder works for wide orbits, repo
+now has actual versioning discipline.
+
+### Known regression
+The full autopilot regression run on `83dfd79` (the baseline before this
+release) showed Saturn V, SLS, and Artemis II FAIL — all three got stuck
+in `loi-approach` because their actual perilune was above LOI triggerAlt,
+so the burn never fired and they fell back to Earth without capturing.
+The fixes below restore the LOI burn (verified: Saturn V went from
+"stuck at altM = 39 770 km in loi-approach" to "active loi-burn at
+altM = 9 907 km" with the fix applied). Full Apollo land + ascent +
+return inside the 50-minute wall-clock CI budget remains tight; tracked
+in `docs/PLAN.md` Workstream R4 (separate "extended" regression run with
+a longer budget).
+
+### Fixed
+- **Lunar capture autopilot bug.** Three contributing changes in
+  `js/houston.js`:
+  1. **TLI cut threshold** raised from `apoE > 0.95 × MOON_DISTANCE` to
+     `apoE > 1.05 × MOON_DISTANCE`. The old 0.95× left the transfer ellipse
+     5 % short of Moon's orbit, so lunar perturbation produced a 30 000 –
+     50 000 km grazing pass — too far above LOI triggerAlt. 1.05× ensures
+     the craft reaches Moon's orbital distance with residual outward
+     velocity, producing a tight encounter. Costs ~150 m/s extra TLI Δv,
+     well within S-IVB / ICPS margin.
+  2. **LOI "missed window" fallback.** `loi-approach` now tracks
+     `minLoiAltM`. If altM rises ≥2 000 km past that minimum, fire LOI
+     immediately — better a wonky capture than no capture.
+  3. **LOI capture condition relaxed.** Previously required
+     `periM > 0.4 × targetPeri` AND `apoM < 4 × targetApo`. Now also
+     accepts any bound captured orbit (`periM > 30 km` AND `apoM < 0.9 ×
+     MOON_SOI`). Wonky elliptical captures still count as captured —
+     the descent or TEI phase tightens the orbit further.
+- **Adaptive lunar-coast warp ladder** in Houston autopilot. The previous
+  ladder tiered on `triggerAlt × {5, 1.5}`, which never reached 50× warp
+  for ships with a wide free-return loop (Artemis II, `lunarApo` ≈ 9 500 km
+  → `triggerAlt` ≈ 38 000 km, so the entire SOI lay below the 5× threshold).
+  Re-tiered as `triggerAlt × {1.5, 1.1, 1.02}` so both Apollo (small target,
+  lots of room above for 50×) and Artemis II (big target, narrow approach
+  corridor) get a useful 100× → 10× → 5× → 1× warp profile (cruise tier
+  raised to 100× to give Saturn V room to finish landing inside CI budget).
+- **Playwright autofly regression** now opens a fresh browser context per
+  mission instead of reusing one page across all 9 ships. The shared-page
+  V8 heap was degrading badly enough that the later ships (Soyuz, SLS,
+  Saturn V) were running at sub-realtime sim ratios and timing out.
+
+### Added
+- `CHANGELOG.md` (Keep a Changelog format) and a `0.x.0` retroactive
+  history of every prior commit.
+- `scripts/release.sh` — gates on a green regression, bumps `package.json`,
+  prompts for the CHANGELOG entry, creates an annotated tag.
+- `scripts/clean-dev.sh` — dry-run / `--apply` cleanup of gitignored dev
+  artefacts (loose test PNGs, server logs).
+- `LICENSE` — MIT.
+- README badges for version + license + roadmap.
+- `docs/PLAN.md` — full outstanding-work + reality-audit plan with
+  prioritised waves.
+- `npm test`, `npm run test:smoke`, `npm run test:moonpos`,
+  `npm run test:planner`, `npm run release`, `npm start` script entries.
+
+### Changed
+- `package.json` reset to a meaningful version (was `1.0.0`, never tagged);
+  `description`, `author`, `license`, `homepage`, `repository`, `keywords`
+  populated.
+
+## [0.5.0] — 2026-04-27
+Shuttle now actually lands.
+
+### Changed
+- Shuttle entry numbers retuned to allow real STS-style shallow glide:
+  drag area 60 → 250 m², drag coeff 1.2 → 1.5, lift coeff 1.2 → 0.6,
+  deorbit periTarget −200 → +50 km. Standalone autofly reaches touchdown
+  at sim t = 11 136 s.
+- Fullscreen toggle moved from `f` → `Shift+F` so it stops shadowing
+  the existing SAS:FREE binding on `f`.
+
+## [0.4.0] — 2026-04-26
+Lunar-orbit insertion no longer crawls through real-time.
+
+### Changed
+- LOI approach switches to aggressive time-warp (50× → 10× → 1× ladder)
+  so Apollo and Artemis don't sit at 1× for the entire SOI crossing.
+- Shuttle landing tolerance widened so non-perfect glideslopes still
+  count as a successful landing.
+
+## [0.3.0] — 2026-04-26
+Parachute physics now match real values.
+
+### Changed
+- Capsule parachute drag area + drag coefficient set per-vehicle from
+  manufacturer figures (Apollo CM, Soyuz Descent Module, Crew Dragon).
+- Time-warp now permitted during parachute descent (was clamped to 1×,
+  which made splashdown drag for minutes of real-time).
+
+## [0.2.0] — 2026-04-25
+The mission planner shows you the route, and Houston tells you when you've
+drifted off it.
+
+### Added
+- Inline trajectory-preview canvas on the planner: draws Earth, parking
+  orbit, transfer ellipse, Moon and lunar orbit ring with burn-point
+  markers.
+- Hard validation for physically impossible plans (sub-30 km lunar orbit,
+  sub-160 km LEO) — the verdict goes red and the launch button stays
+  disabled.
+- On-plan tracking: when the craft is flying a planned mission, Houston
+  narrates "Orbit on profile" or "Apo trending low — extend the burn".
+- Time-of-day lighting: Sun direction in the renderer is derived from
+  each mission's real launch date via `sunEclipticLongitude(JD)`.
+
+### Changed
+- Shuttle deorbit drops periapsis to −200 km so the lifting body actually
+  commits to landing instead of skip-entering forever (revisited in
+  v0.5.0 — see above).
+
+## [0.1.0] — 2026-04-25
+Initial commit.
+
+### Added
+- 11 spacecraft (Mercury, Sputnik, Vostok, Falcon 9, Shuttle STS-1,
+  Soyuz TMA-19M, Saturn V/Apollo 11, SLS Artemis I, SLS Artemis II,
+  X-1 Sandbox, custom mission planner).
+- Newtonian gravity from Earth + Moon, Tsiolkovsky-driven Δv accounting,
+  exponential-density atmospheric drag, Sutton-Graves heating with
+  direction-aware shields, lifting-body shuttle physics.
+- Houston autopilot with 28+ phase state machine; per-mission CapCom
+  dialog (Jack King, Charlie Blackwell-Thompson, Korolev, STS launch).
+- Pre-launch briefings with real launch dates, crews, and burn schedules.
+- Apollo CSM/LM undock + ghost-CSM lunar-orbit object.
+- Soyuz fast-rendezvous with snap-to-ISS (3-h sim time).
+- Re-entry, parachute deploy, Shuttle runway landing.
+
+[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/JonoGitty/moonshot/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/JonoGitty/moonshot/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/JonoGitty/moonshot/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/JonoGitty/moonshot/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/JonoGitty/moonshot/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/JonoGitty/moonshot/releases/tag/v0.1.0

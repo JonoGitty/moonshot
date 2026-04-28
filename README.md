@@ -1,5 +1,9 @@
 # 🚀 MOONSHOT
 
+[![version](https://img.shields.io/badge/version-0.5.1-blue)](CHANGELOG.md)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![docs](https://img.shields.io/badge/docs-PLAN.md-orange)](docs/PLAN.md)
+
 > **Real physics. Real rockets. Real Moon.**
 > Fly Apollo 11 to the lunar surface. Slingshot Artemis II around the far side. Dock Tim Peake's Soyuz with the ISS. Bring Columbia home to a runway. Plan your own mission with a real Δv budget.
 
@@ -138,9 +142,26 @@ python3 -m http.server 8080
 Playwright tests (optional):
 ```bash
 npm install
-node test-autofly-all.mjs           # autopilot regression for every ship
+npm test                            # autopilot regression for every ship
 node test-autofly-all.mjs apollo    # one ship at a time
+npm run test:smoke                  # quick all-ships load test
+npm run test:moonpos                # verify Moon positions match each launch date
+npm run test:planner                # mission-planner Δv verification
 ```
+
+### Cutting a release
+
+The repo follows [Semantic Versioning](https://semver.org/). See [CHANGELOG.md](CHANGELOG.md)
+for what's in each release and [docs/PLAN.md](docs/PLAN.md) for the roadmap.
+
+```bash
+npm run release patch    # 0.5.0 → 0.5.1
+npm run release minor    # 0.5.0 → 0.6.0
+```
+
+The release script gates on a green regression run, bumps `package.json`,
+prompts you to add the CHANGELOG entry, and creates an annotated git tag.
+Pushing is left as a manual step.
 
 ---
 

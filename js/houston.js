@@ -496,12 +496,18 @@ class HoustonAssist {
       }
 
       case 'tli-burn': {
-        // Full-throttle prograde until apo reaches ~Moon distance
+        // Full-throttle prograde until apo reaches Moon distance with a
+        // small safety margin. Cutting at 0.95 × MOON_DISTANCE (the old
+        // value) left the transfer ellipse 5 % short, so the Moon's
+        // gravity perturbed the craft into a 30 000–50 000 km grazing
+        // approach — too far above LOI triggerAlt to ever fire the burn.
+        // 1.05 × ensures the craft reaches Moon's orbital distance with
+        // residual outward velocity, producing a tighter encounter.
         c.throttle = 1.0;
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x), dt);
 
-        if (c.apoE !== null && c.apoE > MOON_DISTANCE * 0.95) {
+        if (c.apoE !== null && c.apoE > MOON_DISTANCE * 1.05) {
           c.throttle = 0;
           this.autoPhase = 'trans-lunar-coast';
           this.callout('auto-tli-cut', `${D.callsign}: TLI complete. Coasting to the Moon — about 3 days at 100,000× warp.`, 'go');
@@ -586,28 +592,53 @@ class HoustonAssist {
           this.steerTo(Math.atan2(vRelMoon.y, vRelMoon.x) + Math.PI, dt);
         }
 
-        // Adaptive warp: closing 60,000 km at 5× warp takes hours real time.
-        // Stay at 50× until within ~3× the LOI trigger altitude, then drop
-        // through 10× to 1× for the final approach.
+        // Adaptive warp: stay aggressive until very close to the trigger.
+        // For wide-orbit ships (Artemis II, lunarApo 9500 km → triggerAlt
+        // 38,000 km) the entire SOI is below 5× triggerAlt, so the old
+        // gradient never used 50× and the craft crawled toward the burn at
+        // 10× then 1×. Tier on the trigger directly so both Apollo (small
+        // triggerAlt, lots of room above for 50×) and Artemis II (big
+        // triggerAlt, narrow approach corridor) get a useful warp ladder.
         const triggerAlt = Math.max(2000e3, this.autoLunarApo * 4);
         let warpIdx;
-        if (altM > triggerAlt * 5) warpIdx = 4;        // 50× — far
-        else if (altM > triggerAlt * 1.5) warpIdx = 3; // 10× — closing
-        else warpIdx = 0;                              // 1× — about to burn
+        if (altM > triggerAlt * 1.5) warpIdx = 5;       // 100× — coasting in
+        else if (altM > triggerAlt * 1.1) warpIdx = 3;  // 10× — closing
+        else if (altM > triggerAlt * 1.02) warpIdx = 2; // 5× — almost there
+        else warpIdx = 0;                               // 1× — about to burn
         if (this.game.timeWarpIdx !== warpIdx) {
           this.game.timeWarpIdx = warpIdx;
           this.game.timeWarp = TIME_WARP_LEVELS[warpIdx];
+        }
+
+        // Track minimum altitude seen — used to detect "past closest
+        // approach" if our trajectory's actual perilune is above triggerAlt.
+        if (this.minLoiAltM === undefined || altM < this.minLoiAltM) {
+          this.minLoiAltM = altM;
         }
 
         // Start the LOI burn when within reasonable proximity. Threshold
         // scales with the target lunar orbit altitude — Apollo orbits low
         // (~100 km) so trigger at ~2 Mm above surface; Artemis II uses a
         // wide ~9000 km orbit so trigger much earlier.
-        if (altM < triggerAlt) {
+        const reachedTrigger = altM < triggerAlt;
+        // Fallback: if our actual encounter geometry put closest approach
+        // above triggerAlt, we'd otherwise wait forever while altM rises
+        // back out of SOI. Detect "past periapsis" (altM is now > minLoiAltM
+        // by a few Mm) and burn now — better a wonky capture than no capture.
+        const pastClosestApproach = this.minLoiAltM !== undefined
+          && altM > this.minLoiAltM + 2000e3
+          && this.minLoiAltM < MOON_SOI;
+        if (reachedTrigger || pastClosestApproach) {
           this.game.timeWarpIdx = 0;
           this.game.timeWarp = TIME_WARP_LEVELS[0];
           this.autoPhase = 'loi-burn';
-          this.callout('auto-loi', `${D.callsign}: Starting LOI burn.`, 'go');
+          if (pastClosestApproach && !reachedTrigger) {
+            this.callout('auto-loi-late',
+              `${D.callsign}: Past optimal LOI window (perilune ${(this.minLoiAltM/1000).toFixed(0)} km). Burning now to capture.`,
+              'warn');
+          } else {
+            this.callout('auto-loi', `${D.callsign}: Starting LOI burn.`, 'go');
+          }
         }
         break;
       }
@@ -619,16 +650,22 @@ class HoustonAssist {
           this.steerTo(Math.atan2(vRelMoon.y, vRelMoon.x) + Math.PI, dt);
         }
 
-        // LOI complete when we have a reasonably circular Moon orbit:
-        //   periM above the surface by a comfortable margin
-        //   apoM not crazy-elliptical (≤ ~4× target apo)
-        //   BOTH non-null (i.e. truly captured)
+        // LOI complete when we have a captured Moon orbit. Bound = apoM
+        // within the lunar SOI; safe = periM well above the surface. We
+        // deliberately accept wonky elliptical captures (apoM far above
+        // target) because if the encounter geometry was off, a capture
+        // into a 30 000 × 100 km orbit is still a capture — the next
+        // phase circularises through the descent or TEI burn.
         const mission = c.blueprint.mission;
         const targetPeri = this.autoLunarPeri || 90e3;
         const targetApo = this.autoLunarApo || 110e3;
-        const captured = c.periM !== null && c.apoM !== null
-                         && c.periM > targetPeri * 0.4
-                         && c.apoM < targetApo * 4;
+        const tightCapture = c.periM !== null && c.apoM !== null
+                             && c.periM > targetPeri * 0.4
+                             && c.apoM < targetApo * 4;
+        const wonkyCapture = c.periM !== null && c.apoM !== null
+                             && c.periM > 30e3                      // safe altitude
+                             && c.apoM < MOON_SOI * 0.9;             // bound orbit
+        const captured = tightCapture || wonkyCapture;
         if (captured) {
           c.throttle = 0;
           this.autoPhase = 'lunar-orbit-coast';

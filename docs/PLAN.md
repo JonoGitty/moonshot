@@ -197,31 +197,37 @@ were tuned-by-eye in `83dfd79` (drag 60→250 m², lift 1.2→0.6).
   ground we should add a deceleration phase (`parachuteDrag` already a
   field on capsule) instead of allowing 200 m/s rollout indefinitely.
 
-### F4b. Houston Watchdog (v0.7.0 — queued)
-Real-time deviation detection + scripted recovery layer that runs alongside
-the existing autopilot phase machine. Lets us:
-- Push warps even higher safely (currently capped at 10 000× cruise) by
-  having the watchdog catch overshoots before they kill the mission.
-- Recover from anomalies (bad TLI Δv, attitude drift, wrong encounter
-  geometry) instead of just blindly continuing the phase profile.
-- Unlock the autonomous design /loop (F5) — that needs a robust autopilot
-  that can recover from imperfect rocket designs without manual intervention.
+### F4b. Houston Watchdog (v0.7.0 — landed)
+Real-time deviation detection + scripted recovery running per physics
+substep alongside the autopilot. Implementation:
+- `js/watchdog.js` — `HoustonWatchdog` class. State snapshot per tick,
+  predicted-state cache (perilune, reentry angle) via trajectory.js.
+- `js/missions.js` — 9 per-ship `MissionPlan` definitions registered on
+  `window.MISSION_PLANS`. Each plan declares the real-flight metadata
+  + a flat list of `Check` objects matching the schema in
+  `docs/WATCHDOG.md`.
+- 8 standard checks (apply to every mission): attitude-diverged,
+  throttle-stuck, heat-critical, heat-warning, fuel-underrun,
+  earth-impact-predicted, lunar-impact-predicted, reentry-too-steep.
+- Per-mission checks: TLI under/overburn (Saturn V / SLS), LOI
+  undershoot/overshoot, free-return aim (Artemis II),
+  approach-too-fast (Soyuz), module-sep failure (Vostok / Soyuz),
+  TDU-cannot-retry (Vostok), runway-energy (Shuttle), apo-shortfall
+  (Sputnik), apex-too-low/-high (Mercury).
+- Action types implemented: `callout`, `drop-warp`, `mcc-burn` (drives
+  c.targetAngle / c.throttle until cutWhen returns true or dvBudget
+  exhausted), `replan` (flips houston.autoPhase). `abort-to` is
+  narrative stub at v0.7.0; full mission-type swap deferred to v0.8.0.
+- `test-watchdog.mjs` — Playwright regression confirming the watchdog
+  loads cleanly across all ships and doesn't spuriously fire under
+  nominal autoflight. Anomaly-injection scenarios (per the test plans
+  in `docs/missions/*.md`) are the next acceptance gate.
 
-Architecture sketch:
-```
-HoustonWatchdog (per-substep, alongside autopilot)
-├─ Expected envelope per phase
-│   pos / vel / attitude / altitude / time-to-next-event ranges
-├─ Deviation detector
-│   altE 20 % below predicted → "TLI underburn" → fire MCC trim
-│   pitch off > 5° during burn → drop warp + restabilise
-│   perilune predicted > target → adjust LOI trigger
-│   descent rate above safe envelope → throttle up + drop warp
-├─ Library of historical recoveries
-│   Apollo MCC-1/2/3/4 trim burns, Apollo 13 LOI-2 hybrid, Soyuz phasing trim
-└─ Warp policy
-    aggressive default; watchdog can demand "drop to N" until envelope re-entered
-```
+Per-mission flight plans backing the watchdog rules — one
+`docs/missions/<ship>.md` per ship, with real flight timeline → sim
+phases, expected envelopes, watchdog checks, anomaly heritage from
+real mission history (Apollo 1201/1202 alarms, Vostok 1 module-sep,
+TMA-1/TMA-11 ballistic re-entries), MCC trim budgets, and test plans.
 
 ### F5. Autonomous design /loop (long-horizon)
 The /design-rocket skill exists. The /loop wrapper would:
@@ -283,7 +289,7 @@ WAVE 2 (visible quality):
   F3a-d: HUD additions for manual pilot → v0.10.0
 
 WAVE 3 (depth):
-  F4b: Houston Watchdog (real-time deviation + recovery) → v0.7.0
+  F4b: Houston Watchdog (real-time deviation + recovery) → v0.7.0 ✅ landed
   F4: shuttle landing polish (real STS entry profile)    → v0.11.0
   R1, R2: numbers + timeline audit, citation files       → v0.12.0
   F2b: gravity-turn pitch nudges                          → v0.13.0

@@ -11,9 +11,68 @@ MAJOR = breaking change.
 
 ## [Unreleased]
 
-Tracked in `docs/PLAN.md`. Watchdog system (v0.7.0) — real-time deviation
-detection + scripted recoveries (mid-course corrections, abort handling) —
-is the next architectural milestone, queued for after this release.
+Tracked in `docs/PLAN.md`. Anomaly-injection regression suite (per the
+test plans in `docs/missions/*.md`) is the next acceptance gate.
+
+## [0.7.0] — 2026-04-29
+
+Houston Watchdog — real-time deviation detection + scripted recoveries
+running alongside the autopilot. Deeply researched per-mission flight
+plans (one `docs/missions/<ship>.md` per real flight) drive the
+watchdog's check rules. The combination is what unlocks high-warp
+autopilot flights of complex profiles (Apollo lunar landing, Artemis
+free-return, Tim Peake's 6-hour rendezvous) under off-nominal
+conditions.
+
+### Added
+- `js/watchdog.js` — `HoustonWatchdog` class running per physics
+  substep (alongside `houston.physicsTick`). Builds a flat state
+  snapshot each tick, runs standard + per-mission checks, dispatches
+  actions: `callout`, `drop-warp`, `mcc-burn` (drives a corrective
+  burn through `c.targetAngle` / `c.throttle` until `cutWhen` returns
+  true or `dvBudget` exhausted), `replan` (changes `houston.autoPhase`),
+  `abort-to` (narrative stub at v0.7.0; full mission-type swap
+  deferred to v0.8.0). Predicted-state cache via `trajectory.js`
+  forward-sim, refreshed at 1 Hz sim-time.
+- `js/missions.js` — 9 per-ship `MissionPlan` definitions registered
+  on `window.MISSION_PLANS`. Each plan declares the real flight
+  metadata (date, crew, vehicle, sources) plus a flat list of
+  `Check` objects matching the schema in `docs/WATCHDOG.md`.
+- 8 standard checks applied to every ship: `attitude-diverged`,
+  `throttle-stuck`, `heat-critical`, `heat-warning`, `fuel-underrun`,
+  `earth-impact-predicted`, `lunar-impact-predicted`,
+  `reentry-angle-too-steep`.
+- Per-mission checks (mission-specific flight envelope): TLI under/
+  overburn (Saturn V / SLS), LOI undershoot/overshoot (Saturn V /
+  SLS), TLI free-return aim + accidentally-captured (Artemis II),
+  ISS approach-too-fast (Soyuz), module-sep failure (Vostok / Soyuz),
+  TDU underburn cannot-retry (Vostok), runway-landing energy mgmt
+  (Shuttle), apo-shortfall (Sputnik), apex too-low/too-high (Mercury).
+- `docs/WATCHDOG.md` — architecture spec: schema, severity levels,
+  standard checks table, per-phase deviation patterns, runtime
+  sketch, predicted future state, implementation order.
+- `docs/missions/<ship>.md` — 9 per-mission flight plan documents.
+  Real flight timeline mapped to sim phases, expected envelopes per
+  phase, watchdog checks with severity/action, anomaly heritage from
+  real mission history (Apollo 1201/1202 alarms, Vostok 1 module-sep,
+  TMA-1/TMA-11 ballistic re-entries, etc.), test plans with
+  anomaly-injection scenarios.
+- `test-watchdog.mjs` — Playwright regression that loads every ship,
+  starts autopilot, and verifies (a) the watchdog instance is wired,
+  (b) a `MissionPlan` was loaded, (c) standard + mission checks are
+  running, (d) no `abort`-severity triggers fire under nominal flight.
+  Runs in ~30 sec wall-clock.
+- `npm run test:watchdog` script entry.
+
+### Changed
+- `js/game.js` — instantiate `HoustonWatchdog` alongside
+  `HoustonAssist`; call `watchdog.tick(stepDt)` inside the physics
+  substep loop right after `houston.physicsTick`. Watchdog runs in
+  every CapCom mode (off / assist / auto), so callouts surface even
+  when the user is hand-flying.
+- `index.html` — load `js/missions.js` + `js/watchdog.js` script
+  tags in the right dependency order (after `houston.js`, before
+  `game.js`).
 
 ## [0.6.1] — 2026-04-29
 Real Artemis II profile (free-return flyby), more aggressive cruise warps
@@ -248,7 +307,8 @@ Initial commit.
 - Soyuz fast-rendezvous with snap-to-ISS (3-h sim time).
 - Re-entry, parachute deploy, Shuttle runway landing.
 
-[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/JonoGitty/moonshot/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/JonoGitty/moonshot/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/JonoGitty/moonshot/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/JonoGitty/moonshot/compare/v0.5.1...v0.5.2

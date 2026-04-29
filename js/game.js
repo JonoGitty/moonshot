@@ -21,6 +21,7 @@ window.game = {
   pressedKeys: {},
   lastAccel: 0,                 // for G-force display
   houston: null,                // HoustonAssist instance (or null when disabled)
+  watchdog: null,               // HoustonWatchdog instance — runs alongside Houston
   // Ghost CSM: when the LM undocks in lunar orbit, the CSM itself becomes
   // a passive orbital object tracked here. It orbits Moon on Keplerian
   // motion until the LM ascends back and docks.
@@ -477,6 +478,14 @@ function startMission(shipKey) {
     document.getElementById('hud-capcom').classList.remove('hidden');
   }
 
+  // Houston Watchdog — runs in all CapCom modes (even 'off' for callouts).
+  // Loads the per-mission plan registered on window.MISSION_PLANS[shipKey]
+  // if one exists; otherwise just runs the standard checks.
+  if (typeof HoustonWatchdog !== 'undefined') {
+    if (!window.game.watchdog) window.game.watchdog = new HoustonWatchdog(window.game);
+    window.game.watchdog.reset(shipKey);
+  }
+
   showToast('T+0 · ' + blueprint.name.toUpperCase() + ' READY', 'success');
   showToast('Hold W for throttle. Tilt east with A.');
 }
@@ -648,6 +657,10 @@ function updatePhysics(realDt) {
     // At high time warp this turns ~16 s of unwanted thrust at burn cutoff
     // into ~2 s (vacuum substep cap) — keeps autopilot precise.
     if (window.game.houston) window.game.houston.physicsTick(stepDt);
+    // Watchdog runs after Houston so it sees the autopilot's setpoint
+    // decisions for this substep before evaluating deviations. Pre-empts
+    // Houston by capping timeWarpIdx when severity demands it.
+    if (window.game.watchdog) window.game.watchdog.tick(stepDt);
 
     // Update bodies first (Moon moves; Earth is fixed)
     for (const b of window.game.bodies) b.update(stepDt, window.game.bodies);

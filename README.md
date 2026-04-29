@@ -1,6 +1,6 @@
 # 🚀 MOONSHOT
 
-[![version](https://img.shields.io/badge/version-0.6.1-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.7.0-blue)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![docs](https://img.shields.io/badge/docs-PLAN.md-orange)](docs/PLAN.md)
 
@@ -79,6 +79,10 @@ Then hit **LAUNCH MISSION** and Houston flies the plan.
 - **AUTOPILOT** — Houston flies the entire mission. Disengages on any pilot input.
 
 Each program has its own dialect: Apollo gets Jack King's countdown ("T-minus 15 seconds, guidance is internal..."), Artemis gets Charlie Blackwell-Thompson ("For the Artemis Generation, this is for you"), Soyuz gets Korolev's TsUP team ("Поехали!"), STS-1 gets the original Mission Control launch call.
+
+### Houston Watchdog (v0.7.0)
+
+A second supervisor running per physics substep alongside the autopilot. Knows the expected flight envelope of every mission phase from the per-mission flight plans in [`docs/missions/`](docs/missions/). When the actual trajectory diverges — TLI underburn, lunar perilune too low, ISS approach too fast, deorbit angle wrong, module-sep failure — the watchdog reacts: callout to the feed, drop time-warp, fire a corrective MCC trim burn, or replan to a different phase. Runs in every CapCom mode, including manual-flight, so you get real-time deviation feedback even when Houston isn't touching the controls. See [`docs/WATCHDOG.md`](docs/WATCHDOG.md) for the architecture spec.
 
 ### Pre-launch briefings
 

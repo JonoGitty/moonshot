@@ -642,6 +642,13 @@ function updatePhysics(realDt) {
 
   let sumG = 0, gSamples = 0;
   for (let i = 0; i < substeps; i++) {
+    // Autopilot's phase decisions run BEFORE physics each substep, so the
+    // burn-cutoff / phase-transition logic sees the most recent state and
+    // can throttle-back / re-tier warp before the next physics integration.
+    // At high time warp this turns ~16 s of unwanted thrust at burn cutoff
+    // into ~2 s (vacuum substep cap) — keeps autopilot precise.
+    if (window.game.houston) window.game.houston.physicsTick(stepDt);
+
     // Update bodies first (Moon moves; Earth is fixed)
     for (const b of window.game.bodies) b.update(stepDt, window.game.bodies);
     // Ghost CSM — Keplerian orbit under Moon (+ Earth) gravity

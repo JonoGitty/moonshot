@@ -110,12 +110,29 @@ class HoustonAssist {
     }
   }
 
+  // Per-physics-substep tick — runs inside game.js's updatePhysics loop, so
+  // the autopilot's phase decisions (throttle cutoff, phase transitions,
+  // warp re-tier) react at sim-time resolution rather than at render-frame
+  // resolution. At 1000× warp one frame is 16 sim-seconds; before this
+  // split, runAutopilot only saw 1 sample per 16 s of physics, which made
+  // burns overshoot by 100-200 m/s of unwanted Δv. Now phase decisions
+  // fire every substep (≤2 s vacuum, ≤0.5 s thrust, ≤0.05 s atmosphere).
+  physicsTick(dt) {
+    if (this.mode === 'off' || this.mode !== 'auto') return;
+    const c = this.game.craft;
+    if (!c || c.destroyed) return;
+    this.runAutopilot(dt);
+  }
+
+  // Per-render-frame tick — narration / callouts / plan-adherence checks.
+  // These don't need sim-time resolution and would spam the feed if they
+  // ran per substep (the `fired` Set dedupes callouts but the narration
+  // timer would tick too fast).
   update(dt) {
     if (this.mode === 'off') return;
     const c = this.game.craft;
     if (!c || c.destroyed) return;
 
-    if (this.mode === 'auto') this.runAutopilot(dt);
     this.checkPhaseCallouts(c);
     // Adaptive narration when flying a planned mission — every 10 sec sim time
     if (c.blueprint.plannedBurns) {
@@ -668,10 +685,13 @@ class HoustonAssist {
         // 10× then 1×. Tier on the trigger directly so both Apollo (small
         // triggerAlt, lots of room above for 50×) and Artemis II (big
         // triggerAlt, narrow approach corridor) get a useful warp ladder.
+        // Autopilot reacts per-substep now (game.js calls physicsTick inside
+        // the physics loop), so cruise tiers can run hot — burn cutoff sees
+        // any altM change within 2 s of sim time even at 1000×.
         const triggerAlt = Math.max(2000e3, this.autoLunarApo * 4);
         let warpIdx;
-        if (altM > triggerAlt * 1.5) warpIdx = 5;       // 100× — coasting in
-        else if (altM > triggerAlt * 1.1) warpIdx = 3;  // 10× — closing
+        if (altM > triggerAlt * 1.5) warpIdx = 7;       // 1000× — coasting in
+        else if (altM > triggerAlt * 1.1) warpIdx = 4;  // 50× — closing
         else if (altM > triggerAlt * 1.02) warpIdx = 2; // 5× — almost there
         else warpIdx = 0;                               // 1× — about to burn
         if (this.game.timeWarpIdx !== warpIdx) {
@@ -760,10 +780,11 @@ class HoustonAssist {
         c.throttle = 0;
         const vRelM = { x: c.vel.x - m.vel.x, y: c.vel.y - m.vel.y };
         if (Vec.mag(vRelM) > 1) this.steerTo(Math.atan2(vRelM.y, vRelM.x), dt);
-        // Warp during the coast — a Moon orbit is ~2 hours (7200 s)
-        if (this.game.timeWarpIdx < 5) {
-          this.game.timeWarpIdx = 5;
-          this.game.timeWarp = TIME_WARP_LEVELS[5];
+        // Warp during the coast — pure orbital cruise, no thrust, no
+        // atmosphere, just Kepler integration. 1000× is rock-solid.
+        if (this.game.timeWarpIdx < 7) {
+          this.game.timeWarpIdx = 7;
+          this.game.timeWarp = TIME_WARP_LEVELS[7];
         }
         const coasted = c.missionTime - (this.lunarOrbitStart || c.missionTime);
         // 3 orbits ≈ 21,600 s sim time. At 100× warp that's ~3.6 min real.
@@ -801,10 +822,10 @@ class HoustonAssist {
         //   Low:  hover-descent at 1× warp — terrain proximity demands precision
         if (altM > 8e3) {
           c.throttle = 1.0;
-          if (this.game.timeWarpIdx !== 2) {
-            this.game.timeWarpIdx = 2;                  // 5×
-            this.game.timeWarp = TIME_WARP_LEVELS[2];
-          }
+          if (this.game.timeWarpIdx !== 4) {
+            this.game.timeWarpIdx = 4;                  // 50× — autopilot
+            this.game.timeWarp = TIME_WARP_LEVELS[4];   // ticks every substep
+          }                                             // so burn cutoff is precise
         } else {
           if (this.game.timeWarpIdx !== 0) {
             this.game.timeWarpIdx = 0;                  // 1× for terminal
@@ -862,8 +883,9 @@ class HoustonAssist {
         const target = upAngle * (pitchDeg / 90) + eastAngle * (1 - pitchDeg / 90);
         this.steerTo(target, dt);
 
-        // 5× warp once clear of immediate surface — predictable burn
-        const warpTarget = altM > 2e3 ? 2 : 0;
+        // 50× once clear of immediate surface — predictable burn,
+        // autopilot ticks per substep so attitude tracks even at 50×
+        const warpTarget = altM > 2e3 ? 4 : 0;
         if (this.game.timeWarpIdx !== warpTarget) {
           this.game.timeWarpIdx = warpTarget;
           this.game.timeWarp = TIME_WARP_LEVELS[warpTarget];
@@ -889,10 +911,11 @@ class HoustonAssist {
         if (Vec.mag(vRelM) > 1) this.steerTo(Math.atan2(vRelM.y, vRelM.x), dt);
         c.throttle = 1.0;
 
-        // Engage 5× warp during burn (accel is low, burn takes a while)
-        if (this.game.timeWarpIdx < 2) {
-          this.game.timeWarpIdx = 2;
-          this.game.timeWarp = TIME_WARP_LEVELS[2];
+        // 10× warp during burn — accel is low, burn takes a while, and
+        // autopilot's per-substep cutoff prevents Δv overshoot
+        if (this.game.timeWarpIdx < 3) {
+          this.game.timeWarpIdx = 3;
+          this.game.timeWarp = TIME_WARP_LEVELS[3];
         }
         // Cut once we're escaping the Moon
         if (altM > MOON_SOI * 0.6) {
@@ -947,11 +970,12 @@ class HoustonAssist {
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x), dt);
 
-        // Phase 1: far out. Warp through phasing.
+        // Phase 1: far out. Warp through phasing — pure orbital coast,
+        // 500× safe and fast.
         if (dist > 5e3) {
-          if (this.game.timeWarpIdx < 4) {
-            this.game.timeWarpIdx = 4;
-            this.game.timeWarp = TIME_WARP_LEVELS[4];
+          if (this.game.timeWarpIdx < 6) {
+            this.game.timeWarpIdx = 6;
+            this.game.timeWarp = TIME_WARP_LEVELS[6];
           }
           // Real Soyuz phasing takes ~6 hours. After a substantial wait, if
           // the craft's orbit is close to ISS altitude (same period), they'd
@@ -993,9 +1017,10 @@ class HoustonAssist {
         c.throttle = 0;
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x), dt);
-        if (this.game.timeWarpIdx < 4) {
-          this.game.timeWarpIdx = 4;
-          this.game.timeWarp = TIME_WARP_LEVELS[4];
+        // Docked + station-keeping — pure orbital coast, push warp hard
+        if (this.game.timeWarpIdx < 6) {
+          this.game.timeWarpIdx = 6;
+          this.game.timeWarp = TIME_WARP_LEVELS[6];
         }
         if (c.missionTime - (this.stayStart || c.missionTime) > 600) {
           this.game.timeWarpIdx = 0;

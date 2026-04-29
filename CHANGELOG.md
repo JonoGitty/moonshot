@@ -13,6 +13,35 @@ MAJOR = breaking change.
 
 Tracked in `docs/PLAN.md`.
 
+## [0.6.0] — 2026-04-29
+Autopilot decoupled from render frame rate — phase decisions now run inside
+the physics substep loop, so cruise warps can run hot without burns
+overshooting on cutoff.
+
+### Changed
+- **Autopilot ticks per physics substep, not per render frame.** Before:
+  `houston.update(realDt)` fired once per `requestAnimationFrame` (~16 ms
+  wall-clock). At 1000× warp that was 16 sim-seconds between phase
+  decisions, so burn cutoff conditions could be missed by 16 s of
+  unwanted thrust = 100–200 m/s of unwanted Δv. After: split into
+  `physicsTick(stepDt)` inside `game.js:updatePhysics` substep loop +
+  `update(realDt)` for narration / callouts at frame rate. Phase
+  transitions now happen within ≤2 s of sim time even at 100 000× warp.
+- **Default cruise warps bumped** now that the autopilot reacts at
+  sim-time resolution:
+  - LOI-approach far cruise: 100× → **1000×** (saves ~12 min on Apollo)
+  - LOI-approach closing: 10× → 50×
+  - Lunar-orbit-coast: 100× → **1000×**
+  - Lunar-descent high altitude (> 8 km): 5× → 50×
+  - Lunar-ascent above 2 km: 5× → 50×
+  - TEI burn: 5× → 10×
+  - ISS rendezvous phasing: 50× → 500×
+  - ISS stay (docked): 50× → 500×
+  Burn-precision tiers (loi-burn, deorbit-burn, terminal descent / ascent,
+  atmospheric reentry) deliberately stay at 1× — those phases are
+  attitude- or drag-sensitive and the per-substep autopilot already
+  handles cutoff precisely without needing high warp.
+
 ## [0.5.2] — 2026-04-28
 Briefing trajectory previews for stock missions, manual-flight HUD upgrades,
 expanded route-adherence narration, autopilot warp-tuning for landing/ascent,
@@ -192,7 +221,8 @@ Initial commit.
 - Soyuz fast-rendezvous with snap-to-ISS (3-h sim time).
 - Re-entry, parachute deploy, Shuttle runway landing.
 
-[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/JonoGitty/moonshot/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/JonoGitty/moonshot/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/JonoGitty/moonshot/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/JonoGitty/moonshot/compare/v0.4.0...v0.5.0

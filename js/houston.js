@@ -74,8 +74,20 @@ class HoustonAssist {
     this.autoTargetPeri = profile.targetPeri || 100e3;
     this.autoLunarApo = profile.lunarApo || 110e3;
     this.autoLunarPeri = profile.lunarPeri || 90e3;
-    this.autoLunarStaySec = profile.lunarStaySec || 30;
-    this.autoOrbitCoastSec = profile.orbitCoastSimTime || 5000;
+    // Real-mission durations played at high time-warp. Defaults are
+    // generic; per-mission overrides come from constants.js profile.
+    // The autopilot does NOT compress mission steps — warp is a wall-
+    // clock lever only.
+    this.autoLunarStaySec = profile.lunarStaySec
+      ?? 77760;                              // Apollo 11 actual: 21h 36m
+    this.autoLunarOrbitCoastSec = profile.lunarOrbitCoastSec
+      ?? 93600;                              // 13 lunar orbits ≈ 26 hr (Apollo 11)
+    this.autoLmRendezvousSec = profile.lmRendezvousSec
+      ?? 14400;                              // ~4 hr LM ascent → CSM dock
+    this.autoOrbitCoastSec = profile.orbitCoastSimTime
+      ?? 5000;
+    this.autoIssStaySec = profile.issStaySec
+      ?? 16070400;                           // 186 days at ISS (Tim Peake)
     this.autoCircularizeBurning = false;
 
     // Pick the right vocabulary
@@ -557,15 +569,18 @@ class HoustonAssist {
       case 'orbit-coast': {
         // Wait in LEO for the TLI window. Moon needs to be roughly 114°
         // ahead of the craft (angular lead) so that after the half-Hohmann
-        // transfer (≈5 days) Moon arrives at the craft's apoapsis.
+        // transfer (≈5 days) Moon arrives at the craft's apoapsis. The
+        // real Apollo 11 parking orbit was 2h 32m because that's when the
+        // window opened — sim plays the same orbital mechanics, just at
+        // 100 000× warp so 2h 32m = ~0.09 sec wall clock.
         c.throttle = 0;
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x), dt);
 
-        // Fast-forward while waiting for the window (Moon orbit period ~27.3 d)
-        if (this.game.timeWarpIdx < 7) {
-          this.game.timeWarpIdx = 7;
-          this.game.timeWarp = TIME_WARP_LEVELS[7];
+        // Max warp during the window-wait — pure orbital coast.
+        if (this.game.timeWarpIdx < 9) {
+          this.game.timeWarpIdx = 9;
+          this.game.timeWarp = TIME_WARP_LEVELS[9];
         }
 
         const moonAng = Math.atan2(m.pos.y - e.pos.y, m.pos.x - e.pos.x);
@@ -785,16 +800,22 @@ class HoustonAssist {
         c.throttle = 0;
         const vRelM = { x: c.vel.x - m.vel.x, y: c.vel.y - m.vel.y };
         if (Vec.mag(vRelM) > 1) this.steerTo(Math.atan2(vRelM.y, vRelM.x), dt);
-        // Warp during the coast — pure orbital cruise, no thrust, no
-        // atmosphere, just Kepler integration. 10 000× is rock-solid
-        // because each vacuum substep is still 2 s sim time.
-        if (this.game.timeWarpIdx < 8) {
-          this.game.timeWarpIdx = 8;
-          this.game.timeWarp = TIME_WARP_LEVELS[8];
+        // Pure orbital cruise — no thrust, no atmosphere. Push warp to
+        // 100 000× (idx 9) so the real Apollo 11 26-hour pre-undock coast
+        // (or 6-day Artemis I DRO half-revolution) compresses to a couple
+        // sec wall clock rather than 26 sec. Each vacuum substep is still
+        // 2 s sim, so even 100 000× is rock-solid.
+        if (this.game.timeWarpIdx < 9) {
+          this.game.timeWarpIdx = 9;
+          this.game.timeWarp = TIME_WARP_LEVELS[9];
         }
-        const coasted = c.missionTime - (this.lunarOrbitStart || c.missionTime);
-        // 3 orbits ≈ 21,600 s sim time. At 100× warp that's ~3.6 min real.
-        if (coasted > 21600) {
+        if (!this.lunarOrbitStart) this.lunarOrbitStart = c.missionTime;
+        const coasted = c.missionTime - this.lunarOrbitStart;
+        // Real mission duration from per-mission profile. Apollo 11 = 13
+        // orbits ≈ 26 hr; Artemis I = 6-day DRO half-revolution. The
+        // autopilot doesn't compress these — warp accelerates wall-clock,
+        // the real timeline plays out at sim-time fidelity.
+        if (coasted > this.autoLunarOrbitCoastSec) {
           this.game.timeWarpIdx = 0;
           this.game.timeWarp = TIME_WARP_LEVELS[0];
           const mission = c.blueprint.mission;
@@ -870,7 +891,17 @@ class HoustonAssist {
             this.callout('descent-sep', `${D.callsign}: Descent stage jettisoned — stays on the lunar surface.`, 'go');
           }
         }
+        // Apollo 11 surface stay was 21h 36m. Push warp to idx 9 (100 000×)
+        // so the surface-stay duration compresses to ~0.8 sec wall clock —
+        // the autopilot plays out the real EVA + sleep + checklist time,
+        // but the player doesn't sit through it.
+        if (this.game.timeWarpIdx < 9) {
+          this.game.timeWarpIdx = 9;
+          this.game.timeWarp = TIME_WARP_LEVELS[9];
+        }
         if (c.missionTime - this.moonStayStart > this.autoLunarStaySec) {
+          this.game.timeWarpIdx = 0;
+          this.game.timeWarp = TIME_WARP_LEVELS[0];
           this.autoPhase = 'lunar-ascent';
           this.callout('moon-liftoff', `${D.callsign}: Lunar liftoff. Heading back to Earth.`, 'go');
         }
@@ -897,16 +928,40 @@ class HoustonAssist {
           this.game.timeWarp = TIME_WARP_LEVELS[warpTarget];
         }
 
-        // Once we have a stable moon orbit, rendezvous with the CSM ghost
-        // (if we're Apollo and CSM is waiting in orbit), then TEI.
+        // Once we have a stable moon orbit, hold for the real ~4-hour
+        // active-rendezvous window before docking. Real Apollo 11 ascended
+        // at T+124:22 and docked at T+128:03 — about 3h 41m. We play that
+        // out at warp rather than snap-to-CSM immediately.
         if (c.periM !== null && c.periM > 20e3) {
           c.throttle = 0;
+          this.autoPhase = 'lm-rendezvous-coast';
+          this.lmRendezvousStart = c.missionTime;
+          this.callout('lm-orbit', `${D.callsign}: LM in stable orbit. Active rendezvous with CSM coming up.`, 'go');
+        }
+        break;
+      }
+
+      // After LM ascent reaches orbit, coast through the real ~4-hour
+      // rendezvous window (Apollo 11: T+124:29 insertion → T+128:03 dock).
+      // Played at warp idx 9 so 4 hr ≈ 0.14 sec wall clock.
+      case 'lm-rendezvous-coast': {
+        c.throttle = 0;
+        const vRelM = { x: c.vel.x - m.vel.x, y: c.vel.y - m.vel.y };
+        if (Vec.mag(vRelM) > 1) this.steerTo(Math.atan2(vRelM.y, vRelM.x), dt);
+        if (this.game.timeWarpIdx < 9) {
+          this.game.timeWarpIdx = 9;
+          this.game.timeWarp = TIME_WARP_LEVELS[9];
+        }
+        const elapsed = c.missionTime - (this.lmRendezvousStart || c.missionTime);
+        if (elapsed > this.autoLmRendezvousSec) {
+          this.game.timeWarpIdx = 0;
+          this.game.timeWarp = TIME_WARP_LEVELS[0];
           if (this.game.ghostCSM && typeof dockCSM === 'function') {
             this.callout('rendezvous', `${D.callsign}: Closing on CSM — rendezvous and docking.`, 'go');
             dockCSM();
           }
           this.autoPhase = 'tei-burn';
-          this.callout('moon-orbit-ret', `${D.callsign}: Back in Moon orbit. Trans-Earth injection next.`, 'go');
+          this.callout('moon-orbit-ret', `${D.callsign}: CSM dock confirmed — Bull's-eye. Trans-Earth injection next.`, 'go');
         }
         break;
       }
@@ -977,30 +1032,29 @@ class HoustonAssist {
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x), dt);
 
         // Phase 1: far out. Warp through phasing — pure orbital coast,
-        // push warp hard. 1 000× drops the 3-hour fast-rendezvous wait
-        // to ~10 s wall.
+        // max warp. The real TMA-19M 6-hour fast-rendezvous (DV-1 → DV-2 →
+        // DV-3 → DV-4 sequence over 4 orbits) is played out at idx 9 so
+        // 6 hours compresses to ~0.22 sec wall clock. The actual phasing-
+        // burn execution is abstracted: we wait the real duration, then
+        // snap the craft onto ISS to represent mission-control completing
+        // the burn sequence (autonomous Kurs autopilot, manual TORU).
         if (dist > 5e3) {
-          if (this.game.timeWarpIdx < 7) {
-            this.game.timeWarpIdx = 7;
-            this.game.timeWarp = TIME_WARP_LEVELS[7];
+          if (this.game.timeWarpIdx < 9) {
+            this.game.timeWarpIdx = 9;
+            this.game.timeWarp = TIME_WARP_LEVELS[9];
           }
-          // Real Soyuz phasing takes ~6 hours. After a substantial wait, if
-          // the craft's orbit is close to ISS altitude (same period), they'd
-          // never catch up in reality. We approximate the phasing burns by
-          // snapping the ISS into close proximity after a fixed warped wait.
           if (!this.rendezvousStart) this.rendezvousStart = c.missionTime;
           const elapsed = c.missionTime - this.rendezvousStart;
-          if (elapsed > 3 * 3600) {
-            // "Completed" the phasing: approximate the 4-orbit fast-rendezvous
-            // by snapping the craft onto ISS with matching velocity. Real
-            // Soyuz does ~6 hours of burns to achieve this; we fast-forward.
+          // Use per-mission orbit-coast duration (Soyuz: 21 600 = 6 hr real
+          // fast-rendezvous; could promote other ships to iss-dock later).
+          if (elapsed > this.autoOrbitCoastSec) {
             c.pos.x = iss.pos.x - 50;          // 50 m behind ISS
             c.pos.y = iss.pos.y;
             c.vel.x = iss.vel.x;
             c.vel.y = iss.vel.y;
             this.game.timeWarpIdx = 0;
             this.game.timeWarp = TIME_WARP_LEVELS[0];
-            this.callout('auto-iss-close', `${D.callsign}: Phasing complete — closing to docking interface.`, 'go');
+            this.callout('auto-iss-close', `${D.callsign}: 6-hour rendezvous complete — closing to docking interface.`, 'go');
           }
           break;
         }
@@ -1018,38 +1072,42 @@ class HoustonAssist {
         break;
       }
 
-      // Short "on ISS" coast before de-orbiting. Real Tim Peake stayed 186
-      // days — we do a token few minutes of orbit with warp.
+      // ISS expedition coast. Real Tim Peake stayed 186 days as part of
+      // ISS Expeditions 46/47. We play that real duration at warp idx 9
+      // (100 000×) so 186 days = ~161 sec wall clock — long enough to
+      // feel substantial, short enough not to be tedious.
       case 'iss-stay': {
         c.throttle = 0;
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x), dt);
-        // Docked + station-keeping — pure orbital coast, push warp hard
-        if (this.game.timeWarpIdx < 7) {
-          this.game.timeWarpIdx = 7;
-          this.game.timeWarp = TIME_WARP_LEVELS[7];
+        // Docked + station-keeping — pure orbital coast, max warp.
+        if (this.game.timeWarpIdx < 9) {
+          this.game.timeWarpIdx = 9;
+          this.game.timeWarp = TIME_WARP_LEVELS[9];
         }
-        if (c.missionTime - (this.stayStart || c.missionTime) > 600) {
+        if (c.missionTime - (this.stayStart || c.missionTime) > this.autoIssStaySec) {
           this.game.timeWarpIdx = 0;
           this.game.timeWarp = TIME_WARP_LEVELS[0];
           this.autoPhase = 'deorbit-burn';
-          this.callout('auto-iss-leave', `${D.callsign}: Undocking from ISS. Retrograde burn for re-entry — heading home.`, 'go');
+          this.callout('auto-iss-leave', `${D.callsign}: 186 days on station. Undocking — retrograde burn for re-entry.`, 'go');
         }
         break;
       }
 
-      // ---------- LEO-RETURN missions (Vostok, Falcon 9) ----------
+      // ---------- LEO-RETURN missions (Vostok, Falcon 9, Shuttle) ----------
       case 'leo-coast-before-deorbit': {
         c.throttle = 0;
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x), dt);
-        // Engage warp for a brief orbital coast — real flights (Gagarin,
-        // early Mercury orbital) did ~1 full orbit before re-entry.
-        if (this.game.timeWarpIdx < 5) {
-          this.game.timeWarpIdx = 5;
-          this.game.timeWarp = TIME_WARP_LEVELS[5];
+        // Per-mission orbit duration from profile.orbitCoastSimTime:
+        //   Vostok 1   = 5 400 s (1 orbit / 89 min — historical)
+        //   Falcon 9   = 5 400 s (1 orbit / sim divergence from real Crew-1 ISS)
+        //   STS-1      = 196 200 s (54.5 hr / 36 orbits — real STS-1)
+        // Played at warp idx 9 so STS-1's 54 hr compresses to ~2 sec wall.
+        if (this.game.timeWarpIdx < 9) {
+          this.game.timeWarpIdx = 9;
+          this.game.timeWarp = TIME_WARP_LEVELS[9];
         }
-        // Coast timer: wait until we've accumulated ~90 min of orbit
         if (!this.leoCoastStart) this.leoCoastStart = c.missionTime;
         if (c.missionTime - this.leoCoastStart > this.autoOrbitCoastSec) {
           this.game.timeWarpIdx = 0;

@@ -100,7 +100,8 @@ T+ from launch ignition (06:47:44 UT, 16 Nov 2022).
 
 ### `lunar-orbit-coast`
 - Real Artemis I: 1.5 lunar revolutions in DRO over ~6 days.
-- Our model: 21 600 s (3 lunar orbits at our shorter ~7 200 s orbital period). Acceptable abstraction.
+- Our model now plays the real **6-day duration** (`lunarOrbitCoastSec = 518 400 s`)
+  at warp 100 000× → ~5.2 sec wall clock. No more 3-orbit shortcut.
 
 ### `tei-burn`
 - Real Artemis I: DRO departure burn 281 m/s + return powered flyby 297 m/s. Two burns.

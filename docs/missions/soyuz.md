@@ -96,8 +96,10 @@ T+ from launch (11:03:09 UT, 15 Dec 2015).
 - **Exit:** `c.milestones.dockedWithISS`
 
 ### `iss-stay`
-- 186 days real. Our model: `coastSec` parameter (default 600 s sim).
-- Warp idx 7 (1 000×).
+- 186 days real, played at sim-time fidelity. `autoIssStaySec = 16 070 400 s`
+  (= 186 days). Warp idx 9 (100 000×) → ~161 sec wall clock for the full
+  expedition. Autopilot does NOT skip the stay — the real Tim Peake mission
+  plays out, just at compressed wall-clock.
 
 ### `deorbit-burn`
 - **Envelope:**

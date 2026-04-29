@@ -14,6 +14,50 @@ MAJOR = breaking change.
 Tracked in `docs/PLAN.md`. Anomaly-injection regression suite (per the
 test plans in `docs/missions/*.md`) is the next acceptance gate.
 
+## [0.7.1] — 2026-04-29
+
+Mission durations are now **real** — every step of every mission plays
+out at its real sim-time duration. Time-warp is a wall-clock lever only
+(`/loop`-style work where the player can compress wall-clock without
+losing any of the real mission timeline). No more "lunar orbit fast-
+forwarded to 3 orbits", "30 s surface stay", "snap-to-ISS after a token
+3-hour wait", "STS-1 orbits for 90 min then deorbits".
+
+### Changed
+- **Apollo 11 lunar orbit**: was 21 600 s (3 sim orbits) → **93 600 s
+  (13 real lunar orbits, ~26 hr)**, the actual Apollo 11 pre-undock
+  duration. Plays at warp 100 000× → ~0.94 sec wall clock.
+- **Apollo 11 surface stay**: was 30 s → **77 760 s (21h 36m, the real
+  Tranquility Base stay)**. Warp idx 9 → ~0.78 sec wall clock.
+- **Apollo 11 LM-to-CSM rendezvous**: was instant snap-dock at the
+  moment LM ascent reached orbit → **new `lm-rendezvous-coast` phase,
+  14 400 s (~4 hr active rendezvous, real Apollo timeline)**. CSM dock
+  fires at the end of the coast.
+- **Soyuz fast-rendezvous**: was 3 hr (10 800 s) → **6 hr (21 600 s,
+  real TMA-19M)**, played at warp 100 000× → ~0.22 sec wall clock.
+  Phasing burns themselves are still abstracted (snap onto ISS at
+  the end of the real fast-rendezvous duration); full DV-1/2/3/4
+  execution deferred to v0.8.x.
+- **Soyuz ISS stay**: was 600 s (10 min) → **16 070 400 s (186 days,
+  Tim Peake's Expedition 46/47)**. Warp idx 9 → ~161 sec wall clock.
+- **STS-1 orbit**: was 5 400 s (1 orbit) → **196 200 s (54.5 hr,
+  36 orbits, real STS-1)**. Warp idx 9 → ~1.96 sec wall clock.
+- **Artemis I DRO half-revolution**: was implicit short coast →
+  **518 400 s (6 days)**. Warp idx 9 → ~5.2 sec wall clock.
+- **Parking-orbit / pre-TLI / leo-coast warp**: bumped from idx 7
+  (1 000×) to **idx 9 (100 000×)** so the natural TLI-window wait
+  compresses to ~0.09 sec wall.
+- **Vacuum substep cap**: bumped 2 s → **5 s** so the substep loop
+  scales at warp 9. Still ≥200 substeps per LEO orbit and ≥100 substeps
+  per lunar orbit, so orbital integration stays stable. Each substep
+  fires `houston.physicsTick` + `watchdog.tick` so phase decisions
+  remain at sim-time resolution.
+
+### Behaviour
+- The autopilot still completes every mission. Vostok end-to-end PASS
+  with the new durations (real 1-orbit coast at warp 9 → reentry).
+  Soyuz / Saturn V / SLS / Artemis II regressions are pending.
+
 ## [0.7.0] — 2026-04-29
 
 Houston Watchdog — real-time deviation detection + scripted recoveries
@@ -307,7 +351,8 @@ Initial commit.
 - Soyuz fast-rendezvous with snap-to-ISS (3-h sim time).
 - Re-entry, parachute deploy, Shuttle runway landing.
 
-[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/JonoGitty/moonshot/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/JonoGitty/moonshot/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/JonoGitty/moonshot/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/JonoGitty/moonshot/compare/v0.5.2...v0.6.0

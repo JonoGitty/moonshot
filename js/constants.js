@@ -198,10 +198,13 @@ const SPACECRAFT = {
     name: 'Falcon 9',
     subtitle: 'Modern orbital workhorse',
     mission: 'leo-return',
+    // Sim divergence: real Crew-1 docked ISS for 167 days. Our profile
+    // is generic LEO-return — coast 1 orbit before deorbit. (Could promote
+    // to mission='iss-dock' to match real Crew-1 fully — see falcon9.md.)
     profile: {
       targetApo: 420e3,
       targetPeri: 400e3,
-      orbitCoastSimTime: 5400,
+      orbitCoastSimTime: 5400,             // 90 min ≈ 1 orbit
     },
     briefing: {
       missionName: 'SpaceX Crew-1 — Dragon to ISS',
@@ -366,10 +369,11 @@ const SPACECRAFT = {
     subtitle: 'Gagarin · first human in space · 1961',
     program: 'soviet',
     mission: 'leo-return',
+    // Real Vostok 1: exactly 1 orbit (89 min), then retrograde burn.
     profile: {
       targetApo: 327e3,
       targetPeri: 181e3,
-      orbitCoastSimTime: 5400,
+      orbitCoastSimTime: 5400,             // 89 min ≈ 1 orbit (Vostok 1 actual)
     },
     briefing: {
       missionName: 'Vostok 1 — "Poyekhali!"',
@@ -470,11 +474,15 @@ const SPACECRAFT = {
     // System — Starship HLS or Blue Moon — which we don't model). Mission
     // is lunar orbit / flyby then return to Earth for splashdown.
     mission: 'moon-orbit',
+    // Real Artemis I durations: 25d 10h 53m total. The DRO portion was
+    // ~6 days; we play it at high warp rather than truncating.
     profile: {
       targetApo: 200e3,
       targetPeri: 180e3,
       lunarApo: 300e3,
       lunarPeri: 130e3,
+      orbitCoastSimTime: 86400,            // 24 hr Earth-orbit checkout before TLI
+      lunarOrbitCoastSec: 518400,          // 6-day DRO half-revolution
     },
     briefing: {
       missionName: 'Artemis I (SLS-1)',
@@ -609,6 +617,7 @@ const SPACECRAFT = {
       // and gets captured anyway) has a meaningful threshold.
       lunarApo: 9500e3,
       lunarPeri: 7500e3,
+      orbitCoastSimTime: 86400,            // 24 hr Earth-orbit checkout before TLI
     },
     briefing: {
       missionName: 'Artemis II',
@@ -705,10 +714,11 @@ const SPACECRAFT = {
     name: 'Space Shuttle',
     subtitle: 'STS-1 Columbia · first orbital shuttle flight',
     mission: 'leo-return',
+    // Real STS-1: 54.5 hours / 36 orbits before deorbit. Played at warp.
     profile: {
       targetApo: 267e3,
       targetPeri: 244e3,
-      orbitCoastSimTime: 5400,
+      orbitCoastSimTime: 196200,           // 54.5 hr orbit duration (STS-1 actual)
     },
     briefing: {
       missionName: 'STS-1 Columbia',
@@ -804,10 +814,14 @@ const SPACECRAFT = {
     subtitle: 'Tim Peake · Principia to ISS · 2015',
     program: 'soviet',
     mission: 'iss-dock',
+    // Real Tim Peake mission: 6-hour fast-rendezvous to ISS, 186-day
+    // expedition (ISS Expedition 46/47), then ballistic re-entry.
+    // Played at high warp — 186 days at 100 000× = 161 sec wall clock.
     profile: {
       targetApo: 420e3,                    // ISS altitude
       targetPeri: 408e3,
-      orbitCoastSimTime: 5400,
+      orbitCoastSimTime: 21600,            // 6 hr fast-rendezvous (real TMA-19M)
+      issStaySec: 16070400,                // 186 days at ISS
     },
     briefing: {
       missionName: 'Soyuz TMA-19M — ESA Principia',
@@ -909,12 +923,19 @@ const SPACECRAFT = {
     subtitle: 'Apollo Lunar Architecture',
     program: 'apollo',
     mission: 'moon',                       // Moon + return
+    // Real Apollo 11 mission durations. The autopilot plays these out at
+    // high time-warp rather than compressing — warp is a wall-clock lever,
+    // not a mission-step skipper. At 100 000× warp the longest cruise
+    // (3-day trans-lunar coast) is 2.6 sec wall.
     profile: {
       targetApo: 186e3,
       targetPeri: 183e3,
       lunarApo: 122e3,
       lunarPeri: 101e3,
-      lunarStaySec: 30,
+      orbitCoastSimTime: 9120,             // 2h 32m parking orbit before TLI window
+      lunarOrbitCoastSec: 93600,           // 13 lunar orbits ≈ 26 hr before LM undock
+      lunarStaySec: 77760,                 // 21h 36m surface stay (Apollo 11 actual)
+      lmRendezvousSec: 14400,              // ~4 hr LM ascent insertion → CSM dock
     },
     briefing: {
       missionName: 'Apollo 11 — SA-506',

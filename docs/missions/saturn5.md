@@ -170,10 +170,13 @@ T+ from launch ignition (13:32:00 UT, 16 Jul 1969).
 - **Anomaly heritage:** Apollo 11 LOI-1 was nominal 891 m/s; LOI-2 17 s circularisation also nominal.
 
 ### `lunar-orbit-coast`
-- **Envelope:** stable lunar orbit, `apoM, periM` constant within 5 km, warp idx 8 (10 000×)
+- **Envelope:** stable lunar orbit, `apoM, periM` constant within 5 km, warp idx 9 (100 000×)
 - **Setpoints:** throttle 0, attitude prograde-Moon
 - **Watchdog checks:** none beyond standard (already captured)
-- **Exit:** `coasted > 21 600 s` sim
+- **Exit:** `coasted > 93 600 s` sim — **13 lunar orbits (~26 hr)**, the real
+  Apollo 11 pre-undock duration. At warp 100 000× this compresses to ~0.94 sec
+  wall clock. The autopilot does NOT skip the coast; it plays out the real
+  timeline at high time-warp.
 
 ### `lunar-descent` (PDI to touchdown)
 - **Envelope:**
@@ -196,7 +199,8 @@ T+ from launch ignition (13:32:00 UT, 16 Jul 1969).
 - **Envelope:** `c.landed`, `altM ≈ 0`, throttle 0
 - **Setpoints:** throttle 0, jettison Descent stage on entry, wait `autoLunarStaySec`
 - **Watchdog checks:** none
-- **Exit:** sim time elapsed > `autoLunarStaySec`
+- **Exit:** sim time elapsed > `autoLunarStaySec` (Apollo 11 actual: **77 760 s
+  = 21h 36m surface stay**). Played at warp 100 000× → ~0.78 sec wall clock.
 
 ### `lunar-ascent`
 - **Envelope:**

@@ -644,9 +644,21 @@ function updatePhysics(realDt) {
   let maxStep;
   if (altE < ATMOSPHERE_HEIGHT) maxStep = 0.05;
   else if (craft.thrusting) maxStep = 0.5;
-  else maxStep = 2.0;
+  else maxStep = 30.0;                                 // vacuum cruise — 30 s
+  // sim still gives 180+ substeps per LEO orbit (5400 s period), 240 per
+  // lunar orbit (7200 s), and 78k per Moon orbit (27.3 days). Keeps the
+  // substep count bounded at high warp so the long real-duration coasts
+  // (Soyuz 186 day stay, Apollo 26 hr lunar orbit, SLS 6 day DRO) don't
+  // bury Chrome under 1000+ substeps per frame.
 
-  const substeps = Math.max(1, Math.ceil(simDt / maxStep));
+  // Hard cap: never run more than this many substeps per frame, regardless
+  // of warp. At warp 9 (100 000×) and 10 fps minimum (realDt ≤ 0.1 s clamp),
+  // simDt = 10 000 s and 30-s substep would ask for 334 substeps. Cap at
+  // 200 → 50-s substep in that worst case (still fine for orbital
+  // integration). Without the cap, low-fps spirals send substeps to
+  // thousands and lock the page.
+  const MAX_SUBSTEPS = 200;
+  const substeps = Math.max(1, Math.min(MAX_SUBSTEPS, Math.ceil(simDt / maxStep)));
   const stepDt = simDt / substeps;
 
   let sumG = 0, gSamples = 0;

@@ -13,8 +13,12 @@ const MISSIONS = {
   sputnik:  { budgetS: 600,  expect: ['leftPad', 'reachedOrbit', 'satelliteDeployed'] },
   vostok:   { budgetS: 1500, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
   falcon9:  { budgetS: 1800, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
-  shuttle:  { budgetS: 1800, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
-  soyuz:    { budgetS: 1800, expect: ['leftPad', 'reachedOrbit', 'dockedWithISS', 'landedOnEarth'] },
+  // Bumped budgets reflect real mission durations (v0.7.1). Shuttle's
+  // 54.5-hr / 36-orbit STS-1 coast and Soyuz's 186-day Tim-Peake ISS
+  // expedition both play out at sim-time fidelity at warp idx 9, so
+  // wall-clock budgets need headroom even though warp compresses them.
+  shuttle:  { budgetS: 3600, expect: ['leftPad', 'reachedOrbit', 'landedOnEarth'] },
+  soyuz:    { budgetS: 5400, expect: ['leftPad', 'reachedOrbit', 'dockedWithISS', 'landedOnEarth'] },
   // Lunar missions need bigger wall-clock budgets — Apollo's full real
   // timeline (ascent → parking orbit → TLI → 3-day coast → LOI → 3 lunar
   // orbits → descent → surface stay → ascent → rendezvous → TEI → 3-day

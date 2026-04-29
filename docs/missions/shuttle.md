@@ -88,7 +88,9 @@ T+ from launch (12:00:04 UT, 12 Apr 1981).
 
 ### `orbit-coast`
 - **Envelope:** target `apoE ≈ 267 km, periE ≈ 244 km` after OMS-2.
-- Real STS-1: 36 orbits, 54.5 h. Our model: `orbitCoastSimTime: 5400 s` (90 min, 1 sim orbit). Acceptable abstraction — the autopilot just needs the orbit to be stable and the deorbit window to come around.
+- Real STS-1: 36 orbits, 54.5 h. Played at sim-time fidelity:
+  `orbitCoastSimTime = 196 200 s` (= 54.5 hr). Warp idx 9 (100 000×) →
+  ~1.96 sec wall clock for the full 36-orbit duration.
 - **Setpoints:** warp 1 000× during coast; throttle 0; attitude prograde.
 - **Watchdog checks:**
   - `orbit-decay`: `periE < 200 km` and `vRadial < 0` for > 60 s sim → minor → callout

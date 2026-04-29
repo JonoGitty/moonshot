@@ -1,6 +1,6 @@
 {
   "name": "moonshot",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "Real-physics 2D space-flight simulator. 11 real spacecraft, autopilot flies the actual mission profile, manual flight backed by the same physics.",
   "homepage": "https://github.com/JonoGitty/moonshot",

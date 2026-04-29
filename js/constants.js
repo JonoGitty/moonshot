@@ -593,15 +593,21 @@ const SPACECRAFT = {
     name: 'SLS Block 1 · Artemis II',
     subtitle: 'First crewed flight to lunar vicinity since 1972',
     program: 'artemis',
-    // Artemis II: ~10-day crewed mission. Real mission is a hybrid free-return
-    // flyby of the Moon, but the trajectory DOES loop around the lunar far side
-    // so in our 2D game we model it as a wide lunar orbit + return (same LOI
-    // + TEI flow as Artemis I) so players can see the lunar loop clearly.
-    mission: 'moon-orbit',
+    // Artemis II: ~10-day crewed mission. Real flight is a free-return flyby
+    // — NO LOI burn. The crew passes ~10 000 km beyond the lunar far side
+    // on the TLI impulse alone and slingshots back on the same trajectory.
+    // We honour that by routing through the lunar-flyby autopilot path
+    // (was previously a fudge as moon-orbit + small LOI to make the loop
+    // visible; corrected v0.6.1 because the loop is visible without LOI).
+    mission: 'moon-flyby',
     profile: {
       targetApo: 200e3,
       targetPeri: 185e3,
-      lunarApo: 9500e3,                  // hybrid free-return far-side distance
+      // Target perilune for the flyby — real Artemis II passes ~10,000 km
+      // beyond the lunar far side. autoLunarApo retained so the LOI
+      // trigger fallback (if the trajectory misses the free-return window
+      // and gets captured anyway) has a meaningful threshold.
+      lunarApo: 9500e3,
       lunarPeri: 7500e3,
     },
     briefing: {

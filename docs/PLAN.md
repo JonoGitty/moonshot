@@ -197,6 +197,32 @@ were tuned-by-eye in `83dfd79` (drag 60→250 m², lift 1.2→0.6).
   ground we should add a deceleration phase (`parachuteDrag` already a
   field on capsule) instead of allowing 200 m/s rollout indefinitely.
 
+### F4b. Houston Watchdog (v0.7.0 — queued)
+Real-time deviation detection + scripted recovery layer that runs alongside
+the existing autopilot phase machine. Lets us:
+- Push warps even higher safely (currently capped at 10 000× cruise) by
+  having the watchdog catch overshoots before they kill the mission.
+- Recover from anomalies (bad TLI Δv, attitude drift, wrong encounter
+  geometry) instead of just blindly continuing the phase profile.
+- Unlock the autonomous design /loop (F5) — that needs a robust autopilot
+  that can recover from imperfect rocket designs without manual intervention.
+
+Architecture sketch:
+```
+HoustonWatchdog (per-substep, alongside autopilot)
+├─ Expected envelope per phase
+│   pos / vel / attitude / altitude / time-to-next-event ranges
+├─ Deviation detector
+│   altE 20 % below predicted → "TLI underburn" → fire MCC trim
+│   pitch off > 5° during burn → drop warp + restabilise
+│   perilune predicted > target → adjust LOI trigger
+│   descent rate above safe envelope → throttle up + drop warp
+├─ Library of historical recoveries
+│   Apollo MCC-1/2/3/4 trim burns, Apollo 13 LOI-2 hybrid, Soyuz phasing trim
+└─ Warp policy
+    aggressive default; watchdog can demand "drop to N" until envelope re-entered
+```
+
 ### F5. Autonomous design /loop (long-horizon)
 The /design-rocket skill exists. The /loop wrapper would:
 1. Pick a mission profile (random or chosen from a backlog).
@@ -257,12 +283,13 @@ WAVE 2 (visible quality):
   F3a-d: HUD additions for manual pilot → v0.10.0
 
 WAVE 3 (depth):
-  F4: shuttle landing polish (real STS entry profile)  → v0.11.0
-  R1, R2: numbers + timeline audit, citation files     → v0.12.0
-  F2b: gravity-turn pitch nudges                        → v0.13.0
+  F4b: Houston Watchdog (real-time deviation + recovery) → v0.7.0
+  F4: shuttle landing polish (real STS entry profile)    → v0.11.0
+  R1, R2: numbers + timeline audit, citation files       → v0.12.0
+  F2b: gravity-turn pitch nudges                          → v0.13.0
 
 WAVE 4 (long-horizon):
-  F5: autonomous design /loop foundation               → v1.0.0
+  F5: autonomous design /loop foundation (gated by F4b)  → v1.0.0
 ```
 
 Each version bump = one merged feature, CHANGELOG entry, regression run,

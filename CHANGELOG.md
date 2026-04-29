@@ -11,7 +11,34 @@ MAJOR = breaking change.
 
 ## [Unreleased]
 
-Tracked in `docs/PLAN.md`.
+Tracked in `docs/PLAN.md`. Watchdog system (v0.7.0) — real-time deviation
+detection + scripted recoveries (mid-course corrections, abort handling) —
+is the next architectural milestone, queued for after this release.
+
+## [0.6.1] — 2026-04-29
+Real Artemis II profile (free-return flyby), more aggressive cruise warps
+that the substep-tick autopilot can keep up with.
+
+### Fixed
+- **Artemis II now flies the real free-return flyby** (was previously
+  faked as a `moon-orbit` mission with a small LOI burn into a wide
+  9 500 × 7 500 km elliptical orbit, "so players could see the lunar
+  loop"). Real Artemis II does NOT do an LOI burn — the crew passes
+  ~10 000 km beyond the lunar far side on the TLI impulse alone and
+  slingshots back on the same trajectory. Routing through the
+  `lunar-flyby` autopilot path (already implemented for v0.5.0) now
+  actually applies. Test expectation updated: required milestones are
+  `leftPad → reachedOrbit → approachedMoon → landedOnEarth` (no
+  `enteredMoonOrbit`).
+
+### Changed
+- **More 10 000× warp** in vacuum cruise phases (each vacuum substep
+  is still a 2 s sim chunk, so even 10 000× warp is rock-solid):
+  - LOI-approach very-far cruise (altM > 3 × triggerAlt): 1 000× → **10 000×**
+  - Lunar-orbit-coast: 1 000× → **10 000×**
+  - Lunar-flyby far cruise (altM > 20 Mm): 100× → **1 000×**
+  - ISS rendezvous phasing: 500× → **1 000×**
+  - ISS docked stay: 500× → **1 000×**
 
 ## [0.6.0] — 2026-04-29
 Autopilot decoupled from render frame rate — phase decisions now run inside
@@ -221,7 +248,8 @@ Initial commit.
 - Soyuz fast-rendezvous with snap-to-ISS (3-h sim time).
 - Re-entry, parachute deploy, Shuttle runway landing.
 
-[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/JonoGitty/moonshot/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/JonoGitty/moonshot/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/JonoGitty/moonshot/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/JonoGitty/moonshot/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/JonoGitty/moonshot/compare/v0.5.0...v0.5.1

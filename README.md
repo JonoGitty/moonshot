@@ -1,6 +1,6 @@
 # 🚀 MOONSHOT
 
-[![version](https://img.shields.io/badge/version-0.6.0-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.6.1-blue)](CHANGELOG.md)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![docs](https://img.shields.io/badge/docs-PLAN.md-orange)](docs/PLAN.md)
 

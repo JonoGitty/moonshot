@@ -649,8 +649,12 @@ class HoustonAssist {
         if (this.minAltM === undefined || altM < this.minAltM) {
           this.minAltM = altM;
         }
-        // Modest warp through the encounter; drop to 10× near closest approach
-        const targetWarpIdx = altM < 20e6 ? 2 : 5;
+        // Warp through the encounter — autopilot ticks per substep so even
+        // 1 000× tracks closest approach precisely. Drop near periapsis.
+        let targetWarpIdx;
+        if (altM > 20e6) targetWarpIdx = 7;        // 1 000× — far cruise
+        else if (altM > 5e6) targetWarpIdx = 5;    // 100× — entering encounter
+        else targetWarpIdx = 2;                    // 5× — close pass
         if (this.game.timeWarpIdx !== targetWarpIdx) {
           this.game.timeWarpIdx = targetWarpIdx;
           this.game.timeWarp = TIME_WARP_LEVELS[targetWarpIdx];
@@ -687,10 +691,11 @@ class HoustonAssist {
         // triggerAlt, narrow approach corridor) get a useful warp ladder.
         // Autopilot reacts per-substep now (game.js calls physicsTick inside
         // the physics loop), so cruise tiers can run hot — burn cutoff sees
-        // any altM change within 2 s of sim time even at 1000×.
+        // any altM change within 2 s of sim time even at 10 000×.
         const triggerAlt = Math.max(2000e3, this.autoLunarApo * 4);
         let warpIdx;
-        if (altM > triggerAlt * 1.5) warpIdx = 7;       // 1000× — coasting in
+        if (altM > triggerAlt * 3)  warpIdx = 8;        // 10 000× — far cruise
+        else if (altM > triggerAlt * 1.5) warpIdx = 7;  // 1 000× — coasting in
         else if (altM > triggerAlt * 1.1) warpIdx = 4;  // 50× — closing
         else if (altM > triggerAlt * 1.02) warpIdx = 2; // 5× — almost there
         else warpIdx = 0;                               // 1× — about to burn
@@ -781,10 +786,11 @@ class HoustonAssist {
         const vRelM = { x: c.vel.x - m.vel.x, y: c.vel.y - m.vel.y };
         if (Vec.mag(vRelM) > 1) this.steerTo(Math.atan2(vRelM.y, vRelM.x), dt);
         // Warp during the coast — pure orbital cruise, no thrust, no
-        // atmosphere, just Kepler integration. 1000× is rock-solid.
-        if (this.game.timeWarpIdx < 7) {
-          this.game.timeWarpIdx = 7;
-          this.game.timeWarp = TIME_WARP_LEVELS[7];
+        // atmosphere, just Kepler integration. 10 000× is rock-solid
+        // because each vacuum substep is still 2 s sim time.
+        if (this.game.timeWarpIdx < 8) {
+          this.game.timeWarpIdx = 8;
+          this.game.timeWarp = TIME_WARP_LEVELS[8];
         }
         const coasted = c.missionTime - (this.lunarOrbitStart || c.missionTime);
         // 3 orbits ≈ 21,600 s sim time. At 100× warp that's ~3.6 min real.
@@ -971,11 +977,12 @@ class HoustonAssist {
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x), dt);
 
         // Phase 1: far out. Warp through phasing — pure orbital coast,
-        // 500× safe and fast.
+        // push warp hard. 1 000× drops the 3-hour fast-rendezvous wait
+        // to ~10 s wall.
         if (dist > 5e3) {
-          if (this.game.timeWarpIdx < 6) {
-            this.game.timeWarpIdx = 6;
-            this.game.timeWarp = TIME_WARP_LEVELS[6];
+          if (this.game.timeWarpIdx < 7) {
+            this.game.timeWarpIdx = 7;
+            this.game.timeWarp = TIME_WARP_LEVELS[7];
           }
           // Real Soyuz phasing takes ~6 hours. After a substantial wait, if
           // the craft's orbit is close to ISS altitude (same period), they'd
@@ -1018,9 +1025,9 @@ class HoustonAssist {
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x), dt);
         // Docked + station-keeping — pure orbital coast, push warp hard
-        if (this.game.timeWarpIdx < 6) {
-          this.game.timeWarpIdx = 6;
-          this.game.timeWarp = TIME_WARP_LEVELS[6];
+        if (this.game.timeWarpIdx < 7) {
+          this.game.timeWarpIdx = 7;
+          this.game.timeWarp = TIME_WARP_LEVELS[7];
         }
         if (c.missionTime - (this.stayStart || c.missionTime) > 600) {
           this.game.timeWarpIdx = 0;

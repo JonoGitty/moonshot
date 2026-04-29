@@ -24,7 +24,11 @@ const MISSIONS = {
   // less, but still need the 3-day coast home.
   saturn5:  { budgetS: 5400, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'landedOnMoon', 'launchedFromMoon', 'landedOnEarth'] },
   sls:      { budgetS: 4200, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit', 'landedOnEarth'] },
-  artemis2: { budgetS: 4200, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'enteredMoonOrbit', 'landedOnEarth'] },
+  // Artemis II is a free-return flyby — no LOI burn, no lunar orbit. The
+  // craft slingshots 10 000+ km beyond the lunar far side on the TLI
+  // impulse alone, then coasts home. Required milestones do NOT include
+  // enteredMoonOrbit (intentional vs. v0.5.x where it was wrongly required).
+  artemis2: { budgetS: 4200, expect: ['leftPad', 'reachedOrbit', 'approachedMoon', 'landedOnEarth'] },
 };
 
 // Fresh context per mission — reusing one page across all 9 ships causes the

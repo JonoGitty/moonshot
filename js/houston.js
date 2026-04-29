@@ -627,10 +627,13 @@ class HoustonAssist {
         const vCoast = c.velocityRelativeTo(e);
         if (Vec.mag(vCoast) > 1) this.steerTo(Math.atan2(vCoast.y, vCoast.x), dt);
 
-        // Max warp during the 3-day coast
-        if (this.game.timeWarpIdx < 8) {
-          this.game.timeWarpIdx = 8;
-          this.game.timeWarp = TIME_WARP_LEVELS[8];
+        // Max warp during the real 3-day coast — at idx 9 (100 000×)
+        // the full coast is ~2.6 sec wall clock. The autopilot doesn't
+        // skip the coast; orbital integration plays out with the Moon
+        // moving 13°/day, MCC trim windows opening at the right times.
+        if (this.game.timeWarpIdx < 9) {
+          this.game.timeWarpIdx = 9;
+          this.game.timeWarp = TIME_WARP_LEVELS[9];
         }
 
         // When inside Moon SOI, branch on mission type
@@ -995,10 +998,10 @@ class HoustonAssist {
         const v = c.velocityRelativeTo(e);
         if (Vec.mag(v) > 1) this.steerTo(Math.atan2(v.y, v.x) + Math.PI, dt);
 
-        // Max warp during 3-day coast
-        if (this.game.timeWarpIdx < 8) {
-          this.game.timeWarpIdx = 8;
-          this.game.timeWarp = TIME_WARP_LEVELS[8];
+        // Max warp during the real 3-day return coast — idx 9 → ~2.6 sec wall
+        if (this.game.timeWarpIdx < 9) {
+          this.game.timeWarpIdx = 9;
+          this.game.timeWarp = TIME_WARP_LEVELS[9];
         }
         // When we're near Earth atmosphere, hand off to re-entry sequence
         if (altE < ATMOSPHERE_HEIGHT + 50e3) {
